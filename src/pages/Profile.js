@@ -8,6 +8,30 @@ const Profile = ({ user, setUser }) => {
   const [name, setName] = useState(user?.name || 'Riya Vinod Thakur');
   const [email, setEmail] = useState(user?.email || 'riya@gmail.com');
   const [password, setPassword] = useState(user?.password || '');
+  
+  const avatars = [
+    // Boy-style
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Felix',
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Jack',
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Leo',
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Bear',
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Max',
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Oliver',
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Noah',
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Liam',
+    // Girl-style
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Sadie',
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Lily',
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Mia',
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Cookie',
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Emma',
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Sophia',
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Zoe',
+    'https://api.dicebear.com/9.x/adventurer/svg?seed=Ava',
+  ];
+  
+  const [avatarUrl, setAvatarUrl] = useState(user?.avatar || avatars[0]);
+  const [showAvatars, setShowAvatars] = useState(false);
 
   const [userStats, setUserStats] = useState({ visualizations: 0, quizzesTaken: 0, avgScore: 0, history: [] });
 
@@ -51,9 +75,9 @@ const Profile = ({ user, setUser }) => {
     });
     localStorage.setItem('registeredUsers', JSON.stringify(updatedUsers));
 
-    // 2. Update active session
-    setUser({ ...user, name, password });
-    alert('Security settings updated successfully!');
+    // 2. Update active session (include avatar)
+    setUser({ ...user, name, password, avatar: avatarUrl });
+    alert('Profile updated successfully!');
   };
 
   return (
@@ -64,11 +88,26 @@ const Profile = ({ user, setUser }) => {
         className="profile-header"
       >
         <div className="profile-avatar-section">
-          <div className="profile-avatar">
-            {name[0]}
-            <button className="edit-avatar">
-              <Edit2 size={16} />
-            </button>
+          <div style={{ position: 'relative', display: 'inline-block' }}>
+            <div className="profile-avatar">
+              <img src={avatarUrl} alt="Avatar" />
+              <button className="edit-avatar" onClick={() => setShowAvatars(!showAvatars)}>
+                <Edit2 size={16} />
+              </button>
+            </div>
+            {showAvatars && (
+              <div className="avatar-selector">
+                {avatars.map((url, i) => (
+                  <img
+                    key={i}
+                    src={url}
+                    alt="Avatar Option"
+                    className="avatar-option"
+                    onClick={() => { setAvatarUrl(url); setShowAvatars(false); }}
+                  />
+                ))}
+              </div>
+            )}
           </div>
           <div className="profile-title">
             {isEditing ? (
@@ -104,21 +143,18 @@ const Profile = ({ user, setUser }) => {
           <h2>Personal Information</h2>
           <div className="info-list">
             <div className="info-item">
-              <User size={20} color="#10b981" />
               <div>
                 <label>Full Name</label>
                 <span>{name}</span>
               </div>
             </div>
             <div className="info-item">
-              <Mail size={20} color="#10b981" />
               <div>
                 <label>Email</label>
                 <span>{email}</span>
               </div>
             </div>
             <div className="info-item">
-              <Lock size={20} color="#10b981" />
               <div>
                 <label>Login Password</label>
                 {isEditing ? (

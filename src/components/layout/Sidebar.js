@@ -9,7 +9,8 @@ import {
   LogOut,
   Database,
   Menu,
-  X
+  X,
+  Terminal
 } from 'lucide-react';
 import './Sidebar.css';
 
@@ -19,19 +20,31 @@ const Sidebar = ({ user, setUser }) => {
   const menuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { path: '/code-visualizer', icon: Code, label: 'Code Visualizer' },
+    { path: '/sandbox', icon: Terminal, label: 'Sandbox Challenges' },
     { path: '/quiz', icon: Trophy, label: 'Quiz' },
     { path: '/profile', icon: User, label: 'Profile' },
   ];
 
   const dataStructures = [
-    { path: '/visualizer/array', label: 'Array' },
+    // Linear
+    { path: '/visualizer/array', label: 'Static Array' },
+    { path: '/visualizer/dynamic_array', label: 'Dynamic Array' },
     { path: '/visualizer/stack', label: 'Stack' },
     { path: '/visualizer/queue', label: 'Queue' },
-    { path: '/visualizer/linkedlist', label: 'Linked List' },
-    { path: '/visualizer/tree', label: 'Tree' },
-    { path: '/visualizer/graph', label: 'Graph' },
-    { path: '/visualizer/hashtable', label: 'Hash Table' },
-    { path: '/visualizer/heap', label: 'Heap' },
+    { path: '/visualizer/circular_queue', label: 'Circular Queue' },
+    { path: '/visualizer/linkedlist', label: 'Singly Linked List' },
+    { path: '/visualizer/doubly_linkedlist', label: 'Doubly Linked List' },
+    { path: '/visualizer/circular_linkedlist', label: 'Circular Linked List' },
+    // Trees
+    { path: '/visualizer/tree', label: 'Binary Tree' },
+    { path: '/visualizer/bst', label: 'Binary Search Tree' },
+    { path: '/visualizer/redblack', label: 'Red-Black Tree' },
+    { path: '/visualizer/heap', label: 'Max Heap' },
+    { path: '/visualizer/minheap', label: 'Min Heap' },
+    // Graphs & Hashes
+    { path: '/visualizer/graph', label: 'Graph (Adj List)' },
+    { path: '/visualizer/graph_matrix', label: 'Graph (Adj Matrix)' },
+    { path: '/visualizer/hashtable', label: 'Hash Table' }
   ];
 
   return (
@@ -51,7 +64,16 @@ const Sidebar = ({ user, setUser }) => {
       </div>
 
       <div className="user-profile-mini">
-        <div className="avatar">{user?.name?.[0] || 'U'}</div>
+        <div className="avatar">
+          {(() => {
+            const saved = localStorage.getItem('currentUser');
+            const u = saved ? JSON.parse(saved) : null;
+            const avatarUrl = u?.avatar || null;
+            return avatarUrl
+              ? <img src={avatarUrl} alt="avatar" style={{ width: '100%', height: '100%', borderRadius: '50%', objectFit: 'cover' }} />
+              : <span>{user?.name?.[0] || 'U'}</span>;
+          })()}
+        </div>
         <div className="user-info">
           <span className="name">{user?.name || 'User'}</span>
           <span className="email">{user?.email || 'user@example.com'}</span>

@@ -28,14 +28,49 @@ const Quiz = () => {
   const [quizQuestions, setQuizQuestions] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
 
-  const fetchQuestions = () => {
+  const fetchQuestions = async () => {
     setIsLoading(true);
-    // Simulate specialized random fetch from local bank for uniqueness
-    setTimeout(() => {
+    try {
+      // Fetch 10 multiple choice questions from OpenTDB (Category 18: Computer Science)
+      const res = await fetch('https://opentdb.com/api.php?amount=10&category=18&type=multiple');
+      const data = await res.json();
+      
+      const formattedQuestions = data.results.map((q) => {
+        // Decode HTML entities (OpenTDB returns html encoded text)
+        const decodeHtml = (html) => {
+          const txt = document.createElement("textarea");
+          txt.innerHTML = html;
+          return txt.value;
+        };
+        
+        const decodedQuestion = decodeHtml(q.question);
+        const correct = decodeHtml(q.correct_answer);
+        const incorrect = q.incorrect_answers.map(decodeHtml);
+        
+        // Randomly insert the correct answer
+        const options = [...incorrect];
+        const answerIdx = Math.floor(Math.random() * 4);
+        options.splice(answerIdx, 0, correct);
+        
+        return {
+          topic: q.category || 'Computer Science',
+          question: decodedQuestion,
+          options: options,
+          answer: answerIdx,
+          explanation: `The correct answer is ${correct}.`
+        };
+      });
+      
+      if (formattedQuestions.length === 0) throw new Error("No questions fetched");
+      setQuizQuestions(formattedQuestions);
+    } catch (err) {
+      console.error(err);
+      // Fallback local bank if offline
       const shuffled = [...QUIZ_BANK].sort(() => 0.5 - Math.random());
-      setQuizQuestions(shuffled.slice(0, 10)); // Pick 10 random
+      setQuizQuestions(shuffled.slice(0, 10));
+    } finally {
       setIsLoading(false);
-    }, 800);
+    }
   };
 
   useEffect(() => {

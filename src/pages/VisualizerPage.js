@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Trash2, Search, Shuffle, RotateCcw, Check, X, Book } from 'lucide-react';
 
-// Import all visualizers
+// Import array of visualizers
 import ArrayVisualizer from '../components/visualizers/ArrayVisualizer';
 import StackVisualizer from '../components/visualizers/StackVisualizer';
 import QueueVisualizer from '../components/visualizers/QueueVisualizer';
@@ -13,47 +13,34 @@ import GraphVisualizer from '../components/visualizers/GraphVisualizer';
 import HashTableVisualizer from '../components/visualizers/HashTableVisualizer';
 import HeapVisualizer from '../components/visualizers/HeapVisualizer';
 
+import {
+  DynamicArrayVisualizer, CircularQueueVisualizer,
+  DoublyLinkedListVisualizer, ExtendedTreeVisualizer,
+  TrieVisualizer, GraphMatrixVisualizer,
+  BloomFilterVisualizer, DisjointSetVisualizer
+} from '../components/visualizers/AdvancedVisualizers';
+
 const structureInfo = {
-  array: { 
-    title: 'Array', 
-    subtitle: 'Contiguous memory storage with O(1) access', 
-    maxSize: 10 
-  },
-  stack: { 
-    title: 'Stack', 
-    subtitle: 'LIFO - Last In First Out principle', 
-    maxSize: 8 
-  },
-  queue: { 
-    title: 'Queue', 
-    subtitle: 'FIFO - First In First Out principle', 
-    maxSize: 8 
-  },
-  linkedlist: { 
-    title: 'Linked List', 
-    subtitle: 'Nodes connected by pointers', 
-    maxSize: 8 
-  },
-  tree: { 
-    title: 'Binary Tree', 
-    subtitle: 'Hierarchical structure with parent-child relationships', 
-    maxSize: 7 
-  },
-  graph: { 
-    title: 'Graph', 
-    subtitle: 'Network of vertices connected by edges', 
-    maxSize: 4 
-  },
-  hashtable: { 
-    title: 'Hash Table', 
-    subtitle: 'Key-value pairs with O(1) average lookup', 
-    maxSize: 6 
-  },
-  heap: { 
-    title: 'Heap', 
-    subtitle: 'Complete binary tree with heap property', 
-    maxSize: 7 
-  },
+  array: { title: 'Static Array', subtitle: 'Contiguous memory storage with O(1) access', maxSize: 10 },
+  dynamic_array: { title: 'Dynamic Array', subtitle: 'Auto-resizing contiguous memory block', maxSize: 10 },
+  stack: { title: 'Stack', subtitle: 'LIFO - Last In First Out principle', maxSize: 8 },
+  queue: { title: 'Queue', subtitle: 'FIFO - First In First Out principle', maxSize: 8 },
+  circular_queue: { title: 'Circular Queue', subtitle: 'Queue working as a circle', maxSize: 8 },
+  linkedlist: { title: 'Singly Linked List', subtitle: 'Nodes connected by pointers', maxSize: 8 },
+  doubly_linkedlist: { title: 'Doubly Linked List', subtitle: 'Nodes with next and prev pointers', maxSize: 8 },
+  circular_linkedlist: { title: 'Circular Linked List', subtitle: 'Linked list connected back to root', maxSize: 8 },
+  tree: { title: 'Binary Tree', subtitle: 'Hierarchical structure with parent-child relationships', maxSize: 7 },
+  bst: { title: 'Binary Search Tree', subtitle: 'Left is smaller, right is larger', maxSize: 7 },
+  avl: { title: 'AVL Tree', subtitle: 'Self balancing binary search tree', maxSize: 7 },
+  redblack: { title: 'Red-Black Tree', subtitle: 'Self balancing via coloring rules', maxSize: 7 },
+  trie: { title: 'Trie (Prefix Tree)', subtitle: 'Tree optimized for string search', maxSize: 7 },
+  graph: { title: 'Graph (Adj List)', subtitle: 'Network of vertices connected by edges via lists', maxSize: 5 },
+  graph_matrix: { title: 'Graph (Adj Matrix)', subtitle: 'Network of vertices connected by edges via matrices', maxSize: 4 },
+  hashtable: { title: 'Hash Table', subtitle: 'Key-value pairs with O(1) average lookup', maxSize: 6 },
+  bloom: { title: 'Bloom Filter', subtitle: 'Probabilistic set representation', maxSize: 8 },
+  disjoint: { title: 'Disjoint Set (Union-Find)', subtitle: 'Tracks partitioned elements', maxSize: 8 },
+  heap: { title: 'Max Heap', subtitle: 'Complete binary tree keeping max element at root', maxSize: 7 },
+  minheap: { title: 'Min Heap', subtitle: 'Complete binary tree keeping min element at root', maxSize: 7 },
 };
 
 const VisualizerPage = () => {
@@ -78,34 +65,45 @@ const VisualizerPage = () => {
       case 'array':
         setData([10, 25, 15, 30, 45, 20]);
         break;
+      case 'dynamic_array':
+        setData([5, 10, 15]);
+        break;
       case 'stack':
         setData([5, 10, 15, 20]);
         break;
       case 'queue':
+      case 'circular_queue':
         setData([3, 6, 9, 12]);
         break;
       case 'linkedlist':
+      case 'doubly_linkedlist':
+      case 'circular_linkedlist':
         setData([7, 14, 21, 28]);
         break;
       case 'tree':
+      case 'bst':
+      case 'avl':
+      case 'redblack':
         setData([50, 30, 70, 20, 40, 60, 80]);
         break;
+      case 'minheap':
+        setData([10, 20, 30, 40, 50, 60, 70]);
+        break;
       case 'graph':
+      case 'graph_matrix':
         setData([1, 2, 3, 4]);
         break;
       case 'hashtable':
-        setData([
-          { key: 0, value: 10 },
-          { key: 3, value: 23 },
-          { key: 5, value: 45 },
-          { key: 7, value: 67 },
-        ]);
+        setData([{ key: 0, value: 10 }, { key: 3, value: 23 }, { key: 5, value: 45 }, { key: 7, value: 67 }]);
         break;
+      case 'bloom':
+      case 'disjoint':
+      case 'trie':
       case 'heap':
         setData([90, 70, 80, 50, 60, 40, 30]);
         break;
       default:
-        setData([]);
+        setData([10, 20, 30]);
     }
     // Reset search state when type changes
     setSearchIndex(null);
@@ -278,14 +276,28 @@ const VisualizerPage = () => {
     
     switch(type) {
       case 'array': return <ArrayVisualizer {...commonProps} />;
+      case 'dynamic_array': return <DynamicArrayVisualizer {...commonProps} />;
       case 'stack': return <StackVisualizer {...commonProps} />;
       case 'queue': return <QueueVisualizer {...commonProps} />;
+      case 'circular_queue': return <CircularQueueVisualizer {...commonProps} />;
       case 'linkedlist': return <LinkedListVisualizer {...commonProps} />;
+      case 'doubly_linkedlist': return <DoublyLinkedListVisualizer {...commonProps} circular={false} />;
+      case 'circular_linkedlist': return <DoublyLinkedListVisualizer {...commonProps} circular={true} />;
       case 'tree': return <TreeVisualizer {...commonProps} />;
+      case 'bst': return <TreeVisualizer {...commonProps} />;
+      case 'redblack': return <ExtendedTreeVisualizer {...commonProps} type="redblack" />;
       case 'graph': return <GraphVisualizer {...commonProps} />;
+      case 'graph_matrix': return <GraphMatrixVisualizer {...commonProps} />;
       case 'hashtable': return <HashTableVisualizer {...commonProps} />;
       case 'heap': return <HeapVisualizer {...commonProps} />;
-      default: return <div>Visualizer not found</div>;
+      case 'minheap': return <ExtendedTreeVisualizer {...commonProps} type="minheap" />;
+      default: return (
+        <div style={{ textAlign: 'center', color: '#9ca3af' }}>
+          <Book size={48} style={{ marginBottom: '16px', opacity: 0.5, margin: '0 auto' }} />
+          <h2>Visualization Coming Soon</h2>
+          <p>We are actively building the interactive visualizer for {type}.</p>
+        </div>
+      );
     }
   };
 

@@ -17,8 +17,8 @@ const BookReader = () => {
   const [showToc, setShowToc] = useState(false);
   
   const [book, setBook] = useState({
-    title: "STRUCTURES_TOTAL.SCRAPE",
-    author: "Universal_Knowledge_Bot",
+    title: "LOADING ARCHIVE...",
+    author: "Universal Knowledge Bot",
     pages: []
   });
 
@@ -43,7 +43,6 @@ const BookReader = () => {
         const coreTopics = topics[type] || topics.array;
         let cumulativeText = "";
 
-        // Fetching multiple related articles to ensure 150+ pages of UNIQUE content
         for (const t of coreTopics) {
           const res = await fetch(`https://en.wikipedia.org/w/api.php?origin=*&action=query&prop=extracts&explaintext=1&titles=${t}&format=json`);
           const data = await res.json();
@@ -51,31 +50,35 @@ const BookReader = () => {
           cumulativeText += (pages[Object.keys(pages)[0]]?.extract || "") + "\n\n";
         }
 
-        const sentences = cumulativeText.split(/[.!?]\s+/).filter(s => s.trim().length > 35);
+        const paragraphs = cumulativeText.split(/\n\s*\n/).filter(p => p.trim().length > 60).map(p => p.trim().replace(/==+/g, ''));
         const generatedPages = [];
-        const targetPageCount = 180;
         
-        for (let i = 0; i < targetPageCount; i++) {
+        for (let i = 0; i < paragraphs.length; i++) {
           generatedPages.push({
             id: i,
-            title: `Chapter ${Math.floor(i/20) + 1} :: Protocol ${i+1}`,
-            content: sentences[i % (sentences.length || 1)] || "Accessing deeper academic layers...",
-            note: `CIT_REF_${type.toUpperCase()}_0x${i.toString(16).toUpperCase()}`
+            title: `Chapter ${Math.floor(i/10) + 1} :: Section ${i+1}`,
+            content: paragraphs[i],
+            note: `CIT_REF_WIKIPEDIA`
           });
+        }
+        
+        if (generatedPages.length % 2 !== 0) {
+          generatedPages.push({ id: generatedPages.length, title: "Finis", content: "The material concludes here.", note: "" });
         }
 
         if (mounted) {
           setBook({
-            title: `${type.toUpperCase()} :: TOTAL ARCHIVE`,
-            author: "The Definitive CS Encyclopedia",
+            title: `${type.charAt(0).toUpperCase() + type.slice(1)}: Mastery Volume`,
+            author: "Computer Science Society",
             pages: generatedPages
           });
         }
-      } catch (err) {}
+      } catch (err) {
+        console.error(err);
+      }
     };
 
     scrapeInDepth();
-    // Start closed as requested
     setIsOpened(false);
     return () => { mounted = false; if (utteranceRef.current) window.speechSynthesis.cancel(); };
   }, [type]);
@@ -89,25 +92,13 @@ const BookReader = () => {
     synth.speak(utterance);
   };
 
-  const handleNext = () => (currentPage < book.pages.length - 2) && setCurrentPage(p => p + 2);
-  const handlePrev = () => (currentPage > 0) && setCurrentPage(p => p - 2);
-
-  const handleHighlight = () => {
-    if (activeTool !== 'highlighter') return;
-    const selection = window.getSelection();
-    if (selection.isCollapsed || selection.rangeCount === 0) return;
-    const range = selection.getRangeAt(0);
-    const mark = document.createElement("mark");
-    mark.style.backgroundColor = "rgba(0, 243, 255, 0.4)";
-    mark.style.borderRadius = "2px";
-    try {
-      range.surroundContents(mark);
-    } catch (e) {
-      const contents = range.extractContents();
-      mark.appendChild(contents);
-      range.insertNode(mark);
-    }
-    selection.removeAllRanges();
+  const handleNext = (e) => {
+    e.stopPropagation();
+    if (currentPage < book.pages.length - 2) setCurrentPage(p => p + 2);
+  };
+  const handlePrev = (e) => {
+    e.stopPropagation();
+    if (currentPage > 0) setCurrentPage(p => p - 2);
   };
 
   const leftPage = book.pages[currentPage];
@@ -118,12 +109,10 @@ const BookReader = () => {
       <nav className="book-navbar">
         <div className="navbar-content-guard">
           <button onClick={() => navigate(-1)} className="back-btn-skeuo"><ArrowLeft size={18}/> EXIT</button>
-          <div className="book-metadata-header">ACADEMIC_VOLUME // {type.toUpperCase()}</div>
+          <div className="book-metadata-header">ACADEMIC // {type.toUpperCase()}</div>
           <div className="book-tools">
-            <button className={`tool-btn ${activeTool === 'pointer' ? 'active' : ''}`} onClick={() => setActiveTool('pointer')}><MousePointer2/></button>
-            <button className={`tool-btn ${activeTool === 'highlighter' ? 'active' : ''}`} onClick={() => setActiveTool('highlighter')}><Highlighter/></button>
-            <button className={`tool-btn ${isReading ? 'reading' : ''}`} onClick={() => speak(leftPage?.content + " " + (rightPage?.content || ""))}><Volume2/></button>
-            <button className="tool-btn" onClick={() => setShowToc(true)}><List/></button>
+            <button className={`tool-btn`} onClick={() => speak(leftPage?.content + " " + (rightPage?.content || ""))}><Volume2 size={18} /></button>
+            <button className="tool-btn" onClick={() => setShowToc(true)}><List size={18} /></button>
           </div>
         </div>
       </nav>
@@ -133,15 +122,15 @@ const BookReader = () => {
           <div className="toc-backdrop-overlay">
              <motion.div initial={{scale:0.9, opacity:0}} animate={{scale:1, opacity:1}} exit={{scale:0.9, opacity:0}} className="toc-card">
                 <div className="toc-card-header">
-                  <h3>RESEARCH_INDEX</h3>
-                  <button onClick={() => setShowToc(false)}><X/></button>
+                   <h3>VOLUME INDEX</h3>
+                   <button onClick={() => setShowToc(false)}><X /></button>
                 </div>
                 <div className="toc-scroll">
-                  {Array.from({length: 12}).map((_, i) => (
-                    <div key={i} className="toc-entry" onClick={() => { setCurrentPage(i * 14); setShowToc(false); setIsOpened(true); }}>
-                      <span>CHAPTER {i + 1} :: VOL - {i*15}</span>
+                  {book.pages.filter((_, i) => i % 10 === 0).map((p, i) => (
+                    <div key={i} className="toc-entry" onClick={() => { setCurrentPage(i * 10); setShowToc(false); setIsOpened(true); }}>
+                      <span>SECTION {i+1}</span>
                       <div className="toc-dot-line"></div>
-                      <span>P{i * 14 + 1}</span>
+                      <span>P{i * 10 + 1}</span>
                     </div>
                   ))}
                 </div>
@@ -151,66 +140,63 @@ const BookReader = () => {
       </AnimatePresence>
 
       <div className="book-centering-container">
-        <div className={`book-physical-structure ${isOpened ? 'is-opened' : 'is-closed'}`}>
+        <div className={`uv-book ${isOpened ? 'uv-is-open' : ''}`}>
           
-          <motion.div 
-            className="physics-page physics-cover"
-            animate={{ rotateY: isOpened ? -180 : 0 }}
-            transition={{ duration: 1.5, ease: "easeInOut" }}
-            style={{ transformOrigin: "left", zIndex: isOpened ? 0 : 500 }}
-            onClick={() => setIsOpened(true)}
-          >
-             <div className="cover-inner-v3">
-                <BookIcon size={80} color="#0FF0FC" style={{marginBottom: '40px'}} />
-                <h1>{book.title}</h1>
-                <div className="cover-hr-line"></div>
-                <p>PUBLISHED BY {book.author}</p>
-                <div className="cover-btm-hint">CLICK TO ENGAGE SCANNER</div>
-             </div>
-          </motion.div>
-
-          {/* LEFT PAGE (Only in DOM when open to prevent overlap) */}
-          {isOpened && (
-            <div className="physics-page page-left-internal">
-              <div className="page-paper-surface" onMouseUp={handleHighlight}>
+          <div className="uv-pages">
+            {/* LEFT PAGE */}
+            <div className="uv-page uv-page-left">
+              <div className="page-paper-surface">
                 {leftPage && (
                   <>
                     <div className="p-header">{leftPage.title}</div>
                     <div className="p-content">{leftPage.content}</div>
-                    <div className="p-cite">{leftPage.note}</div>
-                    <div className="p-footer">{currentPage + 1}</div>
+                    <div className="p-footer">Page {currentPage + 1}</div>
                   </>
                 )}
+                <button 
+                  disabled={currentPage === 0} 
+                  onClick={handlePrev} 
+                  className="page-nav-btn prev-page-btn"
+                >
+                  <ChevronLeft />
+                </button>
               </div>
             </div>
-          )}
 
-          {/* RIGHT PAGE (Always there, but covered) */}
-          <div className="physics-page page-right-internal">
-             <div className="page-paper-surface" onMouseUp={handleHighlight}>
-                {rightPage ? (
+            <div className="uv-spine"></div>
+
+            {/* RIGHT PAGE */}
+            <div className="uv-page uv-page-right">
+              <div className="page-paper-surface">
+                {rightPage && (
                   <>
                     <div className="p-header">{rightPage.title}</div>
                     <div className="p-content">{rightPage.content}</div>
-                    <div className="p-cite">{rightPage.note}</div>
-                    <div className="p-footer">{currentPage + 2}</div>
+                    <div className="p-footer">Page {currentPage + 2}</div>
                   </>
-                ) : (
-                  <div className="end-marker">END_OF_TRANSCRIPT</div>
                 )}
-             </div>
+                <button 
+                  disabled={currentPage >= book.pages.length - 2} 
+                  onClick={handleNext} 
+                  className="page-nav-btn next-page-btn"
+                >
+                  <ChevronRight />
+                </button>
+              </div>
+            </div>
           </div>
 
-          <div className="book-spine-bridge"></div>
+          {/* FRONT COVER */}
+          <div className="uv-cover" onClick={() => setIsOpened(!isOpened)}>
+            <div className="uv-cover-inner">
+               <BookIcon size={64} />
+               <h1 className="uv-cover-title">{book.title}</h1>
+               <div className="uv-cover-accent"></div>
+               <p style={{ opacity: 0.8, fontSize: '0.9rem' }}>{book.author}</p>
+               <div style={{ marginTop: '20px', fontSize: '0.75rem', fontWeight: '700', letterSpacing: '1px' }}>CLICK TO OPEN</div>
+            </div>
+          </div>
         </div>
-
-        {isOpened && (
-          <div className="book-pagination-controls">
-            <button disabled={currentPage === 0} onClick={handlePrev} className="pag-btn"><ChevronLeft/></button>
-            <div className="pag-info">TRANSCRIBED PAGE {currentPage + 1}-{currentPage + 2} / 180</div>
-            <button disabled={currentPage >= 178} onClick={handleNext} className="pag-btn"><ChevronRight/></button>
-          </div>
-        )}
       </div>
     </div>
   );

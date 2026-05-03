@@ -1,34 +1,91 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
-import { Database, Mail, Lock, Eye, EyeOff } from 'lucide-react';
+import { Database, Mail, Lock, Eye, EyeOff, User } from 'lucide-react';
 import './Login.css';
 
 const Login = ({ onLogin }) => {
   const [isSignUp, setIsSignUp] = useState(false);
-  const [name, setName] = useState('');
+  
+  // Form fields
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+
+  // States
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [passwordStrength, setPasswordStrength] = useState(0);
+
+  // Password strength calculator
+  useEffect(() => {
+    let strength = 0;
+    if (password.length > 7) strength += 25;
+    if (/[A-Z]/.test(password)) strength += 25;
+    if (/[0-9]/.test(password)) strength += 25;
+    if (/[^A-Za-z0-9]/.test(password)) strength += 25;
+    setPasswordStrength(strength);
+  }, [password]);
+
+  const getStrengthColor = () => {
+    if (passwordStrength < 50) return '#f87171';
+    if (passwordStrength < 75) return '#fbbf24';
+    return '#34d399';
+  };
+  
+  const getStrengthLabel = () => {
+    if (password === '') return '';
+    if (passwordStrength < 50) return 'Weak';
+    if (passwordStrength < 75) return 'Medium';
+    return 'Strong';
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
     
-    // Get stored users
     const users = JSON.parse(localStorage.getItem('registeredUsers') || '[]');
 
     setTimeout(() => {
       if (isSignUp) {
-        // Sign Up Flow
+        // Sign Up Validation Flow
+        if (!firstName || !lastName) {
+          setError('Please provide your full name.');
+          setIsLoading(false);
+          return;
+        }
+        if (password.length < 8) {
+          setError('Password must be at least 8 characters long.');
+          setIsLoading(false);
+          return;
+        }
+        if (password !== confirmPassword) {
+          setError('Passwords do not match.');
+          setIsLoading(false);
+          return;
+        }
+        if (!agreedToTerms) {
+          setError('You must agree to the Terms & Conditions.');
+          setIsLoading(false);
+          return;
+        }
         if (users.find(u => u.email === email)) {
           setError('User already exists with this email.');
           setIsLoading(false);
           return;
         }
-        const newUser = { name, email, password, avatar: name[0].toUpperCase() };
+
+        const newUser = { 
+          name: `${firstName} ${lastName}`, 
+          email, 
+          password, 
+          avatar: `https://api.dicebear.com/9.x/adventurer/svg?seed=${firstName}`
+        };
         users.push(newUser);
         localStorage.setItem('registeredUsers', JSON.stringify(users));
         onLogin(newUser);
@@ -36,21 +93,25 @@ const Login = ({ onLogin }) => {
         // Login Flow
         const user = users.find(u => u.email === email && u.password === password);
         if (user || (email === 'riya@gmail.com' && password === '12345')) {
-          onLogin(user || { name: 'Riya Vinod Thakur', email: 'riya@gmail.com', avatar: 'R' });
+          onLogin(user || { name: 'Riya Vinod Thakur', email: 'riya@gmail.com', avatar: 'https://api.dicebear.com/9.x/adventurer/svg?seed=Riya' });
         } else {
           setError('Invalid email or password.');
         }
       }
       setIsLoading(false);
-    }, 1000);
+    }, 1200);
+  };
+
+  const toggleMode = () => {
+    setIsSignUp(!isSignUp);
+    setError('');
+    setPassword('');
+    setConfirmPassword('');
+    setEmail('');
   };
 
   return (
     <div className="login-container">
-      <div className="login-background">
-        <div className="gradient-orb orb-1"></div>
-        <div className="gradient-orb orb-2"></div>
-      </div>
 
       <motion.div 
         initial={{ opacity: 0, y: 20 }}
@@ -60,24 +121,40 @@ const Login = ({ onLogin }) => {
       >
         <div className="login-header">
           <div className="login-logo">
-            <Database size={32} color="#10b981" />
+            <Database size={32} color="#ffffff" />
           </div>
-          <h1>{isSignUp ? 'Create Account' : 'Welcome Back'}</h1>
-          <p>{isSignUp ? 'Start your learning journey today' : 'Sign in to continue learning'}</p>
+          <h1>{isSignUp ? 'Create an Account' : 'Welcome Back'}</h1>
+          <p>{isSignUp ? 'Join us to start learning data structures' : 'Sign in to continue your progress'}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="login-form">
           {isSignUp && (
-            <div className="input-group">
-              <label>Full Name</label>
-              <div className="input-wrapper">
-                <input
-                  type="text"
-                  placeholder="Your Name"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  required
-                />
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <div className="input-group" style={{ flex: 1 }}>
+                <label>First Name</label>
+                <div className="input-wrapper">
+                  <User size={20} className="input-icon" />
+                  <input
+                    type="text"
+                    placeholder="Jane"
+                    value={firstName}
+                    onChange={(e) => setFirstName(e.target.value)}
+                    required={isSignUp}
+                  />
+                </div>
+              </div>
+              <div className="input-group" style={{ flex: 1 }}>
+                <label>Last Name</label>
+                <div className="input-wrapper">
+                  <User size={20} className="input-icon" />
+                  <input
+                    type="text"
+                    placeholder="Doe"
+                    value={lastName}
+                    onChange={(e) => setLastName(e.target.value)}
+                    required={isSignUp}
+                  />
+                </div>
               </div>
             </div>
           )}
@@ -111,30 +188,89 @@ const Login = ({ onLogin }) => {
                 type="button" 
                 className="password-toggle"
                 onClick={() => setShowPassword(!showPassword)}
+                tabIndex="-1"
               >
                 {showPassword ? <EyeOff size={20} /> : <Eye size={20} />}
               </button>
             </div>
+            
+            {isSignUp && password.length > 0 && (
+              <div>
+                <div className="password-strength">
+                  <div 
+                    className="password-strength-fill" 
+                    style={{ width: `${passwordStrength}%`, background: getStrengthColor() }}
+                  ></div>
+                </div>
+                <div className="password-strength-text" style={{ color: getStrengthColor() }}>
+                  {getStrengthLabel()}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {isSignUp && (
+            <div className="input-group">
+              <label>Confirm Password</label>
+              <div className="input-wrapper">
+                <Lock size={20} className="input-icon" />
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  placeholder="••••••••"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  required={isSignUp}
+                />
+                <button 
+                  type="button" 
+                  className="password-toggle"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  tabIndex="-1"
+                >
+                  {showConfirmPassword ? <EyeOff size={20} /> : <Eye size={20} />}
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="form-options">
+            {isSignUp ? (
+              <label className="remember-me">
+                <input 
+                  type="checkbox" 
+                  checked={agreedToTerms} 
+                  onChange={(e) => setAgreedToTerms(e.target.checked)} 
+                  required
+                />
+                I agree to the Terms & Conditions
+              </label>
+            ) : (
+              <>
+                <label className="remember-me">
+                  <input type="checkbox" />
+                  Remember me
+                </label>
+                <a href="#" className="forgot-password">Forgot password?</a>
+              </>
+            )}
           </div>
 
           {error && <div className="login-error-msg">{error}</div>}
 
           <button 
             type="submit" 
-            className={`login-btn ${isLoading ? 'loading' : ''}`}
+            className="login-btn"
             disabled={isLoading}
           >
-            {isLoading ? 'Processing...' : (isSignUp ? 'Sign Up' : 'Sign In')}
+            {isLoading ? 'Processing securely...' : (isSignUp ? 'Create Account' : 'Sign In to Dashboard')}
           </button>
         </form>
 
         <div className="login-footer">
-          <p>
-            {isSignUp ? 'Already have an account?' : "Don't have an account?"} 
-            <button onClick={() => setIsSignUp(!isSignUp)} className="toggle-auth">
-              {isSignUp ? 'Sign In' : 'Sign Up'}
-            </button>
-          </p>
+          {isSignUp ? 'Already have an account?' : "Don't have an account?"} 
+          <button onClick={toggleMode} className="toggle-auth">
+            {isSignUp ? 'Sign In' : 'Register Now'}
+          </button>
         </div>
       </motion.div>
     </div>

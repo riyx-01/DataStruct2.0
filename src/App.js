@@ -9,7 +9,8 @@ import CodeVisualizerPage from './pages/CodeVisualizerPage';
 import Profile from './pages/Profile';
 import Quiz from './pages/Quiz';
 import Login from './pages/Login';
-import BookReader from './pages/BookReader'; // New Import
+import BookReader from './pages/BookReader';
+import SandboxChallenges from './pages/SandboxChallenges'; // New WASM execution block
 
 import './App.css';
 
@@ -47,6 +48,7 @@ function App() {
               <Route path="/visualizer/:type" element={<VisualizerPage />} />
               <Route path="/code-visualizer" element={<CodeVisualizerPage />} />
               <Route path="/quiz" element={<Quiz />} />
+              <Route path="/sandbox" element={<SandboxChallenges />} />
               <Route path="/profile" element={<Profile user={user} setUser={setUser} />} />
               <Route path="/reader/:type" element={<BookReader />} />
               <Route path="/" element={<Navigate to="/dashboard" />} />

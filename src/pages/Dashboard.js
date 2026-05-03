@@ -2,157 +2,143 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
-  LayoutGrid, 
-  Code, 
-  Trophy, 
-  TrendingUp,
-  Play,
-  BookOpen
+  Users, Code, Trophy, TrendingUp,
+  Activity, BookOpen, Calendar, Clock, ChevronRight, Zap
 } from 'lucide-react';
 import './Dashboard.css';
 
 const Dashboard = ({ user }) => {
   const navigate = useNavigate();
 
-  const features = [
-    {
-      title: 'Data Structure Visualizers',
-      description: 'Interactive visualizations for Arrays, Stacks, Queues, Trees, Graphs, and more',
-      icon: LayoutGrid,
-      color: '#10b981',
-      path: '/visualizer/array',
-      stats: '8 Visualizers'
-    },
-    {
-      title: 'Code Visualizer',
-      description: 'Step-through execution of JavaScript code with real-time memory visualization',
-      icon: Code,
-      color: '#39ff14',
-      path: '/code-visualizer',
-      stats: 'Live Execution'
-    },
-    {
-      title: 'Quiz Challenges',
-      description: 'Test your knowledge with interactive quizzes on data structures and algorithms',
-      icon: Trophy,
-      color: '#f59e0b',
-      path: '/quiz',
-      stats: '5 Quizzes'
-    }
+  const summaryStats = [
+    { label: 'Completed Modules', value: '12', icon: Trophy, color: '#f59e0b', bg: '#fff7ed' },
+    { label: 'Practice Time',     value: '24h', icon: Clock,   color: '#3b82f6', bg: '#eff6ff' },
+    { label: 'Active Streak',     value: '5 Days', icon: Zap,  color: '#10b981', bg: '#ecfdf5' },
+    { label: 'Community Rank',    value: '#142', icon: Users,   color: '#8b5cf6', bg: '#f5f3ff' },
   ];
 
   const recentActivity = [
-    { action: 'Completed Array Quiz', score: '85%', time: '2 hours ago' },
-    { action: 'Visualized Binary Tree', score: '-', time: '5 hours ago' },
-    { action: 'Code Execution: Sorting', score: '100%', time: '1 day ago' },
+    { action: 'Mastered Binary Search Tree', desc: 'Completed visualization & quiz with 90%', time: '2h ago', color: '#10b981' },
+    { action: 'Read: Memory Management',     desc: 'Deep-dive in Code Visualizer notebook', time: '5h ago', color: '#3b82f6' },
+    { action: 'Practice: Circular Queue',    desc: 'Implemented 15+ insert/delete operations', time: 'Yesterday', color: '#f59e0b' },
+    { action: 'Quiz: Hash Tables',           desc: 'Scored 80% on Hash Table challenge', time: '2 days ago', color: '#ef4444' },
+  ];
+
+  const courses = [
+    { name: 'Linear Data Structures',    progress: 85, color: '#3b82f6' },
+    { name: 'Non-Linear (Trees/Graphs)', progress: 40, color: '#8b5cf6' },
+    { name: 'Memory & Pointers',         progress: 65, color: '#f59e0b' },
+    { name: 'Algorithm Complexity',      progress: 20, color: '#10b981' },
+  ];
+
+  const quickLinks = [
+    { label: 'Array',       path: '/visualizer/array' },
+    { label: 'Stack',       path: '/visualizer/stack' },
+    { label: 'Queue',       path: '/visualizer/queue' },
+    { label: 'Linked List', path: '/visualizer/linkedlist' },
+    { label: 'BST',         path: '/visualizer/bst' },
+    { label: 'Graph',       path: '/visualizer/graph' },
   ];
 
   return (
-    <div className="dashboard-container">
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="dashboard-header"
-      >
+    <div className="dash-root">
+
+      {/* ── WELCOME BANNER ── */}
+      <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} className="dash-banner">
         <div>
-          <h1>Welcome back, {user?.name?.split(' ')[0] || 'User'}! 👋</h1>
-          <p>Continue your learning journey</p>
+          <h1 className="dash-greeting">Welcome back, {user?.name?.split(' ')[0] || 'Scholar'} 👋</h1>
+          <p className="dash-sub">Here's your learning snapshot for today</p>
         </div>
-        <div className="stats-cards">
-          <div className="stat-card">
-            <TrendingUp size={20} color="#10b981" />
-            <div>
-              <span className="stat-value">12</span>
-              <span className="stat-label">Visualizations</span>
-            </div>
-          </div>
-          <div className="stat-card">
-            <Trophy size={20} color="#f59e0b" />
-            <div>
-              <span className="stat-value">85%</span>
-              <span className="stat-label">Avg Score</span>
-            </div>
-          </div>
+        <div className="dash-date">
+          <Calendar size={16} />
+          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
         </div>
       </motion.div>
 
-      <div className="features-grid">
-        {features.map((feature, index) => (
+      {/* ── STAT CARDS ── */}
+      <div className="dash-stat-row">
+        {summaryStats.map((s, i) => (
           <motion.div
-            key={feature.title}
+            key={i}
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.1 }}
-            className="feature-card"
-            onClick={() => navigate(feature.path)}
-            style={{ cursor: 'pointer' }}
+            transition={{ delay: i * 0.07 }}
+            className="dash-stat-card"
           >
-            <div className="feature-icon" style={{ background: `${feature.color}20`, color: feature.color }}>
-              <feature.icon size={28} />
+            <div className="dash-stat-icon" style={{ background: s.bg, color: s.color }}>
+              <s.icon size={22} />
             </div>
-            <div className="feature-content">
-              <h3>{feature.title}</h3>
-              <p>{feature.description}</p>
-              <div className="feature-footer">
-                <span className="feature-stats">{feature.stats}</span>
-                <button className="feature-btn" style={{ color: feature.color }}>
-                  <Play size={16} /> Start
-                </button>
-              </div>
+            <div>
+              <p className="dash-stat-label">{s.label}</p>
+              <p className="dash-stat-value">{s.value}</p>
             </div>
           </motion.div>
         ))}
       </div>
 
-      <div className="dashboard-sections">
-        <motion.div 
-          initial={{ opacity: 0, x: -20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.3 }}
-          className="section-card quick-access"
-        >
-          <h2>
-            <BookOpen size={20} />
-            Quick Access
-          </h2>
-          <div className="quick-links">
-            {['Array', 'Stack', 'Queue', 'Linked List'].map((ds) => (
-              <button 
-                key={ds} 
-                className="quick-link"
-                onClick={() => navigate(`/visualizer/${ds.toLowerCase().replace(' ', '')}`)}
-              >
-                {ds}
+      {/* ── MAIN GRID ── */}
+      <div className="dash-main-grid">
+
+        {/* Progress panel */}
+        <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="dash-panel">
+          <div className="dash-panel-header">
+            <span className="dash-panel-title"><BookOpen size={18} /> Learning Progress</span>
+            <button className="dash-view-all" onClick={() => navigate('/visualizer/array')}>
+              View All <ChevronRight size={14} />
+            </button>
+          </div>
+          <div className="dash-progress-list">
+            {courses.map((c, i) => (
+              <div key={i} className="dash-progress-item">
+                <div className="dash-progress-meta">
+                  <span>{c.name}</span>
+                  <span style={{ color: c.color, fontWeight: 700 }}>{c.progress}%</span>
+                </div>
+                <div className="dash-progress-track">
+                  <motion.div
+                    className="dash-progress-fill"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${c.progress}%` }}
+                    transition={{ duration: 1, delay: 0.3 + i * 0.1 }}
+                    style={{ background: c.color }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Quick links */}
+          <div className="dash-panel-header" style={{ marginTop: '28px' }}>
+            <span className="dash-panel-title"><Zap size={18} /> Quick Jump</span>
+          </div>
+          <div className="dash-quick-grid">
+            {quickLinks.map(l => (
+              <button key={l.label} className="dash-quick-btn" onClick={() => navigate(l.path)}>
+                {l.label}
               </button>
             ))}
           </div>
         </motion.div>
 
-        <motion.div 
-          initial={{ opacity: 0, x: 20 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ delay: 0.4 }}
-          className="section-card activity"
-        >
-          <h2>
-            <TrendingUp size={20} />
-            Recent Activity
-          </h2>
-          <div className="activity-list">
-            {recentActivity.map((activity, idx) => (
-              <div key={idx} className="activity-item">
-                <div className="activity-dot"></div>
-                <div className="activity-content">
-                  <span className="activity-action">{activity.action}</span>
-                  <span className="activity-time">{activity.time}</span>
+        {/* Activity feed */}
+        <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }} className="dash-panel">
+          <div className="dash-panel-header">
+            <span className="dash-panel-title"><Activity size={18} /> Recent Activity</span>
+          </div>
+          <div className="dash-activity-list">
+            {recentActivity.map((a, i) => (
+              <div key={i} className="dash-activity-item">
+                <div className="dash-activity-dot" style={{ background: a.color }} />
+                <div className="dash-activity-body">
+                  <p className="dash-activity-title">{a.action}</p>
+                  <p className="dash-activity-desc">{a.desc}</p>
+                  <p className="dash-activity-time"><Clock size={11} /> {a.time}</p>
                 </div>
-                {activity.score !== '-' && (
-                  <span className="activity-score">{activity.score}</span>
-                )}
               </div>
             ))}
           </div>
         </motion.div>
+
       </div>
     </div>
   );
