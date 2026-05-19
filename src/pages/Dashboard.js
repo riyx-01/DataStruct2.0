@@ -19,10 +19,10 @@ const Dashboard = ({ user }) => {
   }, []);
 
   const summaryStats = [
-    { label: 'Completed Quizzes', value: userStats.quizzesTaken.toString(), icon: Trophy, color: '#f59e0b', bg: '#fff7ed' },
-    { label: 'Average Quiz Score', value: `${userStats.avgScore}%`, icon: Clock,   color: '#3b82f6', bg: '#eff6ff' },
-    { label: 'Visualizations Run', value: userStats.visualizations.toString(), icon: Zap,  color: '#10b981', bg: '#ecfdf5' },
-    { label: 'Active Streak',     value: userStats.quizzesTaken > 0 ? '5 Days' : '1 Day', icon: Users,   color: '#8b5cf6', bg: '#f5f3ff' },
+    { label: 'Completed Quizzes', value: userStats.quizzesTaken.toString(), icon: Trophy, color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' },
+    { label: 'Average Quiz Score', value: `${userStats.avgScore}%`, icon: Clock,   color: '#3b82f6', bg: 'rgba(59, 130, 246, 0.1)' },
+    { label: 'Visualizations Run', value: userStats.visualizations.toString(), icon: Zap,  color: '#10b981', bg: 'rgba(16, 185, 129, 0.1)' },
+    { label: 'Active Streak',     value: `${Math.max(1, userStats.visualizations + userStats.quizzesTaken)} Day${Math.max(1, userStats.visualizations + userStats.quizzesTaken) > 1 ? 's' : ''}`, icon: Users,   color: '#8b5cf6', bg: 'rgba(139, 92, 246, 0.1)' },
   ];
 
   const recentActivity = userStats.history.length > 0
@@ -40,10 +40,10 @@ const Dashboard = ({ user }) => {
       ];
 
   const courses = [
-    { name: 'Linear Data Structures',    progress: userStats.visualizations > 0 ? Math.min(100, 20 + userStats.visualizations * 15) : 85, color: '#3b82f6' },
-    { name: 'Non-Linear (Trees/Graphs)', progress: userStats.quizzesTaken > 0 ? Math.min(100, 10 + userStats.quizzesTaken * 25) : 40, color: '#8b5cf6' },
-    { name: 'Memory & Pointers',         progress: userStats.visualizations > 1 ? Math.min(100, 30 + userStats.visualizations * 10) : 65, color: '#f59e0b' },
-    { name: 'Algorithm Complexity',      progress: userStats.avgScore > 75 ? 80 : 20, color: '#10b981' },
+    { name: 'Linear Data Structures',    progress: Math.min(100, Math.max(10, userStats.visualizations * 12 + userStats.quizzesTaken * 5)), color: '#3b82f6' },
+    { name: 'Non-Linear (Trees/Graphs)', progress: Math.min(100, Math.max(5, userStats.quizzesTaken * 25 + userStats.visualizations * 4)), color: '#8b5cf6' },
+    { name: 'Memory & Pointers',         progress: Math.min(100, Math.max(15, userStats.visualizations * 10 + userStats.quizzesTaken * 8)), color: '#f59e0b' },
+    { name: 'Algorithm Complexity',      progress: Math.min(100, Math.max(20, Math.round(userStats.avgScore * 0.7) + userStats.quizzesTaken * 5)), color: '#10b981' },
   ];
 
   const quickLinks = [

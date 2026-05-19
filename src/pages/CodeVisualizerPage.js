@@ -38,7 +38,8 @@ const convertHashComments = (text) => {
 };
 
 const simulateExecution = (rawCode, language) => {
-  const lines = rawCode.split('\n');
+  const uniformCode = convertHashComments(rawCode);
+  const lines = uniformCode.split('\n');
   const history = [];
   const variables = {};
   const memoryStructures = { arrays: {}, trees: {}, graphs: {}, stacks: {} };
@@ -46,8 +47,14 @@ const simulateExecution = (rawCode, language) => {
   
   lines.forEach((rawLine, idx) => {
     const lineNum = idx + 1;
-    const line = rawLine.trim();
-    if (!line || line.startsWith('//') || line.startsWith('#') || line.startsWith('/*') || line.startsWith('*')) {
+    let line = rawLine.trim();
+    
+    // Strip trailing or line comments
+    if (line.includes('//')) {
+      line = line.split('//')[0].trim();
+    }
+    
+    if (!line || line.startsWith('/*') || line.startsWith('*')) {
       return;
     }
     
@@ -192,7 +199,7 @@ const simulateExecution = (rawCode, language) => {
     
     history.push({
       line: lineNum,
-      code: line,
+      code: rawLine.trim(), // Keep raw line text for visual match
       variables: __clone(variables),
       memoryStructures: __clone(memoryStructures),
       why: why,
@@ -291,6 +298,57 @@ const compileAndRun = (rawCode, language) => {
   }
   
   return simulateExecution(rawCode, language);
+};
+
+const preprocessImage = (imageFile) => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.src = URL.createObjectURL(imageFile);
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      
+      // Draw image
+      ctx.drawImage(img, 0, 0);
+      
+      // Apply grayscaling and thresholding (contrast boost)
+      const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imgData.data;
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+        
+        // Binarization (threshold = 120)
+        const v = gray < 120 ? 0 : 255;
+        data[i] = v;
+        data[i + 1] = v;
+        data[i + 2] = v;
+      }
+      ctx.putImageData(imgData, 0, 0);
+      resolve(canvas.toDataURL('image/jpeg', 0.9));
+    };
+  });
+};
+
+const detectLanguage = (text) => {
+  const normalized = text.toLowerCase();
+  if (normalized.includes('#include') || normalized.includes('std::') || normalized.includes('cout <<') || normalized.includes('using namespace std')) {
+    return 'cpp';
+  }
+  if (normalized.includes('public class ') || normalized.includes('system.out.print') || normalized.includes('public static void main')) {
+    return 'java';
+  }
+  if (normalized.includes('def ') || normalized.includes('import ') && normalized.includes(':') || normalized.includes('print ') && !normalized.includes(';')) {
+    return 'python';
+  }
+  if (normalized.includes('let ') || normalized.includes('const ') || normalized.includes('console.log') || normalized.includes('document.get') || normalized.includes('function ')) {
+    return 'javascript';
+  }
+  return 'javascript';
 };
 
 // ==================== LIQUID GLASS RENDERERS ====================
@@ -452,11 +510,25 @@ const CodeVisualizer = () => {
     const file = e.target.files[0];
     if (!file) return;
     setIsScanning(true);
+    setError(null);
     try {
+      // 1. Process image for ultra-high contrast (grayscale + binarize)
+      const processedImageUrl = await preprocessImage(file);
+      
+      // 2. Perform fast OCR recognition on the preprocessed image
       const worker = window.Tesseract;
-      const { data } = await worker.recognize(file, 'eng');
-      setCode(data.text.replace(/‘|’|`|´/g, "'").replace(/“|”/g, '"'));
-    } catch (err) { setError('OCR Failed: ' + err.message); } finally { setIsScanning(false); }
+      const { data } = await worker.recognize(processedImageUrl, 'eng');
+      const scannedText = data.text.replace(/‘|’|`|´/g, "'").replace(/“|”/g, '"');
+      
+      // 3. Update code and automatically detect programming language
+      setCode(scannedText);
+      const detectedLang = detectLanguage(scannedText);
+      setLanguage(detectedLang);
+    } catch (err) { 
+      setError('OCR Failed: ' + err.message); 
+    } finally { 
+      setIsScanning(false); 
+    }
   };
 
   return (
