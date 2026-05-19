@@ -1,41 +1,211 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
 
 :root {
-  --bg-main:       #13111c;
-  --bg-card:       #1e1a2e;
-  --bg-card2:      #261f3a;
-  --text-main:     #f1eeff;
-  --text-muted:    #9d8fbf;
-  --border-color:  rgba(139,92,246,0.25);
+  --bg-main:       rgba(5, 8, 17, 0.93);
+  --bg-card:       rgba(10, 20, 42, 0.65);
+  --bg-card2:      rgba(15, 30, 60, 0.75);
+  --text-main:     #e2f1ff;
+  --text-muted:    #7b92ad;
+  --border-color:  rgba(0, 153, 255, 0.22);
 
-  --primary:       #7c3aed;
-  --primary-light: #a855f7;
-  --primary-hover: #6d28d9;
-  --primary-glow:  rgba(124,58,237,0.45);
+  --primary:       #0099ff;
+  --primary-light: #33adff;
+  --primary-hover: #007acc;
+  --primary-glow:  rgba(0, 153, 255, 0.4);
 
   --success: #34d399;
   --danger:  #f87171;
   --warning: #fbbf24;
 
-  /* Clay shadow stack */
-  --clay:    0 8px 0 rgba(0,0,0,0.40), 0 14px 28px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.10);
-  --clay-sm: 0 4px 0 rgba(0,0,0,0.35), 0  8px 16px rgba(0,0,0,0.45), inset 0 1px 0 rgba(255,255,255,0.08);
-  --clay-press: inset 0 3px 8px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.04);
+  /* Clay shadow stack - Soft, high-fidelity claymorphism */
+  --clay: 20px 20px 40px rgba(0,0,0,0.55), inset 10px 10px 20px rgba(255,255,255,0.03), inset -10px -10px 20px rgba(0,0,0,0.4);
+  --clay-sm: 10px 10px 20px rgba(0,0,0,0.45), inset 6px 6px 12px rgba(255,255,255,0.05), inset -6px -6px 12px rgba(0,0,0,0.3);
+  --clay-press: inset 8px 8px 16px rgba(0,0,0,0.7), inset -4px -4px 8px rgba(255,255,255,0.02);
 }
 
 * { margin:0; padding:0; box-sizing:border-box; }
 
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  backdrop-filter: blur(1em) brightness(6);
+  background-image: radial-gradient(
+    circle at 50% 50%,
+    #0000 0,
+    #0000 2px,
+    hsl(0 0 4%) 2px
+  );
+  background-size: 8px 8px;
+  pointer-events: none;
+}
+
 body {
+  position: relative;
   font-family: 'Inter', sans-serif;
-  background: var(--bg-main);
   color: var(--text-main);
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
-  background-image:
-    radial-gradient(ellipse at 15%  5%,  rgba(124,58,237,0.22) 0%, transparent 50%),
-    radial-gradient(ellipse at 85% 95%,  rgba(168,85,247,0.15) 0%, transparent 50%),
-    radial-gradient(ellipse at 50% 50%,  rgba(79,70,229,0.06)  0%, transparent 70%);
+  --c: #09f;
+  background-color: #000;
+  background-image: radial-gradient(4px 100px at 0px 235px, var(--c), #0000),
+    radial-gradient(4px 100px at 300px 235px, var(--c), #0000),
+    radial-gradient(1.5px 1.5px at 150px 117.5px, var(--c) 100%, #0000 150%),
+    radial-gradient(4px 100px at 0px 252px, var(--c), #0000),
+    radial-gradient(4px 100px at 300px 252px, var(--c), #0000),
+    radial-gradient(1.5px 1.5px at 150px 126px, var(--c) 100%, #0000 150%),
+    radial-gradient(4px 100px at 0px 150px, var(--c), #0000),
+    radial-gradient(4px 100px at 300px 150px, var(--c), #0000),
+    radial-gradient(1.5px 1.5px at 150px 75px, var(--c) 100%, #0000 150%),
+    radial-gradient(4px 100px at 0px 253px, var(--c), #0000),
+    radial-gradient(4px 100px at 300px 253px, var(--c), #0000),
+    radial-gradient(1.5px 1.5px at 150px 126.5px, var(--c) 100%, #0000 150%),
+    radial-gradient(4px 100px at 0px 204px, var(--c), #0000),
+    radial-gradient(4px 100px at 300px 204px, var(--c), #0000),
+    radial-gradient(1.5px 1.5px at 150px 102px, var(--c) 100%, #0000 150%),
+    radial-gradient(4px 100px at 0px 134px, var(--c), #0000),
+    radial-gradient(4px 100px at 300px 134px, var(--c), #0000),
+    radial-gradient(1.5px 1.5px at 150px 67px, var(--c) 100%, #0000 150%),
+    radial-gradient(4px 100px at 0px 179px, var(--c), #0000),
+    radial-gradient(4px 100px at 300px 179px, var(--c), #0000),
+    radial-gradient(1.5px 1.5px at 150px 89.5px, var(--c) 100%, #0000 150%),
+    radial-gradient(4px 100px at 0px 299px, var(--c), #0000),
+    radial-gradient(4px 100px at 300px 299px, var(--c), #0000),
+    radial-gradient(1.5px 1.5px at 150px 149.5px, var(--c) 100%, #0000 150%),
+    radial-gradient(4px 100px at 0px 215px, var(--c), #0000),
+    radial-gradient(4px 100px at 300px 215px, var(--c), #0000),
+    radial-gradient(1.5px 1.5px at 150px 107.5px, var(--c) 100%, #0000 150%),
+    radial-gradient(4px 100px at 0px 281px, var(--c), #0000),
+    radial-gradient(4px 100px at 300px 281px, var(--c), #0000),
+    radial-gradient(1.5px 1.5px at 150px 140.5px, var(--c) 100%, #0000 150%),
+    radial-gradient(4px 100px at 0px 158px, var(--c), #0000),
+    radial-gradient(4px 100px at 300px 158px, var(--c), #0000),
+    radial-gradient(1.5px 1.5px at 150px 79px, var(--c) 100%, #0000 150%),
+    radial-gradient(4px 100px at 0px 210px, var(--c), #0000),
+    radial-gradient(4px 100px at 300px 210px, var(--c), #0000),
+    radial-gradient(1.5px 1.5px at 150px 105px, var(--c) 100%, #0000 150%);
+  background-size:
+    300px 235px,
+    300px 235px,
+    300px 235px,
+    300px 252px,
+    300px 252px,
+    300px 252px,
+    300px 150px,
+    300px 150px,
+    300px 150px,
+    300px 253px,
+    300px 253px,
+    300px 253px,
+    300px 204px,
+    300px 204px,
+    300px 204px,
+    300px 134px,
+    300px 134px,
+    300px 134px,
+    300px 179px,
+    300px 179px,
+    300px 179px,
+    300px 299px,
+    300px 299px,
+    300px 299px,
+    300px 215px,
+    300px 215px,
+    300px 215px,
+    300px 281px,
+    300px 281px,
+    300px 281px,
+    300px 158px,
+    300px 158px,
+    300px 158px,
+    300px 210px,
+    300px 210px,
+    300px 210px;
+  animation: hi 150s linear infinite;
   background-attachment: fixed;
+}
+
+@keyframes hi {
+  0% {
+    background-position:
+      0px 220px,
+      3px 220px,
+      151.5px 337.5px,
+      25px 24px,
+      28px 24px,
+      176.5px 150px,
+      50px 16px,
+      53px 16px,
+      201.5px 91px,
+      75px 224px,
+      78px 224px,
+      226.5px 350.5px,
+      100px 19px,
+      103px 19px,
+      251.5px 121px,
+      125px 120px,
+      128px 120px,
+      276.5px 187px,
+      150px 31px,
+      153px 31px,
+      301.5px 120.5px,
+      175px 235px,
+      178px 235px,
+      326.5px 384.5px,
+      200px 121px,
+      203px 121px,
+      351.5px 228.5px,
+      225px 224px,
+      228px 224px,
+      376.5px 364.5px,
+      250px 26px,
+      253px 26px,
+      401.5px 105px,
+      275px 75px,
+      278px 75px,
+      426.5px 180px;
+  }
+
+  to {
+    background-position:
+      0px 6800px,
+      3px 6800px,
+      151.5px 6917.5px,
+      25px 13632px,
+      28px 13632px,
+      176.5px 13758px,
+      50px 5416px,
+      53px 5416px,
+      201.5px 5491px,
+      75px 17175px,
+      78px 17175px,
+      226.5px 17301.5px,
+      100px 5119px,
+      103px 5119px,
+      251.5px 5221px,
+      125px 8428px,
+      128px 8428px,
+      276.5px 8495px,
+      150px 9876px,
+      153px 9876px,
+      301.5px 9965.5px,
+      175px 13391px,
+      178px 13391px,
+      326.5px 13540.5px,
+      200px 14741px,
+      203px 14741px,
+      351.5px 14848.5px,
+      225px 18770px,
+      228px 18770px,
+      376.5px 18910.5px,
+      250px 5082px,
+      253px 5082px,
+      401.5px 5161px,
+      275px 6375px,
+      278px 6375px,
+      426.5px 6480px;
+  }
 }
 
 .app { display:flex; min-height:100vh; }
@@ -58,30 +228,92 @@ h1,h2,h3 { font-weight:800; color:var(--text-main); letter-spacing:-0.02em; }
 .edu-card {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  border-radius: 22px;
+  border-radius: 28px;
   box-shadow: var(--clay);
+  transition: all 0.3s ease;
+  backdrop-filter: blur(12px);
 }
 
 /* Buttons */
 .btn-primary {
-  padding: 12px 22px;
-  border-radius: 14px; border: none;
+  padding: 14px 28px;
+  border-radius: 20px; border: none;
   background: linear-gradient(135deg, var(--primary-light), var(--primary));
-  color: #fff; font-weight: 700; font-size: 0.95rem; cursor: pointer;
+  color: #fff; font-weight: 800; font-size: 0.95rem; cursor: pointer;
   box-shadow: var(--clay-sm);
-  transition: all 0.18s; font-family: inherit;
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); font-family: inherit;
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
 }
-.btn-primary:hover  { transform: translateY(-2px); box-shadow: 0 6px 0 rgba(0,0,0,0.4), 0 12px 24px var(--primary-glow), inset 0 1px 0 rgba(255,255,255,0.12); }
-.btn-primary:active { transform: translateY(2px); box-shadow: var(--clay-press); }
+.btn-primary:hover  { transform: scale(1.02); box-shadow: 12px 12px 24px rgba(0,0,0,0.4), inset 8px 8px 16px rgba(255,255,255,0.12), inset -8px -8px 16px rgba(0,0,0,0.3); }
+.btn-primary:active { transform: scale(0.98); box-shadow: var(--clay-press); }
 
 .btn-secondary {
-  padding: 12px 22px;
-  border-radius: 14px; border: 1px solid var(--border-color);
+  padding: 14px 28px;
+  border-radius: 20px; border: 1px solid var(--border-color);
   background: var(--bg-card2); color: var(--text-main);
-  font-weight: 600; font-size: 0.95rem; cursor: pointer;
-  box-shadow: var(--clay-sm); transition: all 0.18s; font-family: inherit;
-  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  font-weight: 700; font-size: 0.95rem; cursor: pointer;
+  box-shadow: var(--clay-sm); transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); font-family: inherit;
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px;
 }
-.btn-secondary:hover  { transform: translateY(-2px); background: #2e2650; }
-.btn-secondary:active { transform: translateY(2px); box-shadow: var(--clay-press); }
+.btn-secondary:hover  { transform: scale(1.02); background: #0d254f; box-shadow: 12px 12px 24px rgba(0,0,0,0.4); }
+.btn-secondary:active { transform: scale(0.98); box-shadow: var(--clay-press); }
+
+/* ============================================================
+   BUTTERY SMOOTH PERFORMANCE & FLOW OPTIMIZATIONS
+   ============================================================ */
+
+/* Viewport-wide smooth kinetic scroll mechanics */
+* {
+  scroll-behavior: smooth;
+}
+
+/* Sidebar layout transition easing optimization */
+.main-content {
+  will-change: margin-left;
+  transition: margin-left 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Force hardware GPU acceleration on heavy render containers and cards */
+.edu-card,
+.dash-banner,
+.dash-stat-card,
+.dash-panel,
+.sb-panel,
+.cv-panel,
+.profile-header,
+.profile-card,
+.login-card,
+.toc-card,
+.result-card,
+.history-item,
+.info-item,
+.stat-item {
+  will-change: transform, opacity, box-shadow;
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), 
+              opacity 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.45s cubic-bezier(0.16, 1, 0.3, 1), 
+              border-color 0.45s cubic-bezier(0.16, 1, 0.3, 1),
+              background 0.45s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Force hardware GPU acceleration on interactive action inputs and buttons */
+.btn-primary,
+.btn-secondary,
+.cv-btn,
+.sb-btn,
+.quiz-btn,
+.option-btn,
+.nav-item,
+.ds-item,
+.logout-btn,
+.edit-avatar,
+.avatar-option,
+.save-btn,
+.page-nav-btn {
+  will-change: transform, background-color, border-color, box-shadow;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), 
+              background 0.3s cubic-bezier(0.16, 1, 0.3, 1), 
+              border-color 0.3s cubic-bezier(0.16, 1, 0.3, 1), 
+              box-shadow 0.3s cubic-bezier(0.16, 1, 0.3, 1),
+              color 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}

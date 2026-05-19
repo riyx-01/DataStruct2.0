@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
@@ -9,26 +9,41 @@ import './Dashboard.css';
 
 const Dashboard = ({ user }) => {
   const navigate = useNavigate();
+  const [userStats, setUserStats] = useState({ visualizations: 0, quizzesTaken: 0, avgScore: 0, history: [] });
+
+  useEffect(() => {
+    const savedStats = JSON.parse(localStorage.getItem('userStats'));
+    if (savedStats) {
+      setUserStats(savedStats);
+    }
+  }, []);
 
   const summaryStats = [
-    { label: 'Completed Modules', value: '12', icon: Trophy, color: '#f59e0b', bg: '#fff7ed' },
-    { label: 'Practice Time',     value: '24h', icon: Clock,   color: '#3b82f6', bg: '#eff6ff' },
-    { label: 'Active Streak',     value: '5 Days', icon: Zap,  color: '#10b981', bg: '#ecfdf5' },
-    { label: 'Community Rank',    value: '#142', icon: Users,   color: '#8b5cf6', bg: '#f5f3ff' },
+    { label: 'Completed Quizzes', value: userStats.quizzesTaken.toString(), icon: Trophy, color: '#f59e0b', bg: '#fff7ed' },
+    { label: 'Average Quiz Score', value: `${userStats.avgScore}%`, icon: Clock,   color: '#3b82f6', bg: '#eff6ff' },
+    { label: 'Visualizations Run', value: userStats.visualizations.toString(), icon: Zap,  color: '#10b981', bg: '#ecfdf5' },
+    { label: 'Active Streak',     value: userStats.quizzesTaken > 0 ? '5 Days' : '1 Day', icon: Users,   color: '#8b5cf6', bg: '#f5f3ff' },
   ];
 
-  const recentActivity = [
-    { action: 'Mastered Binary Search Tree', desc: 'Completed visualization & quiz with 90%', time: '2h ago', color: '#10b981' },
-    { action: 'Read: Memory Management',     desc: 'Deep-dive in Code Visualizer notebook', time: '5h ago', color: '#3b82f6' },
-    { action: 'Practice: Circular Queue',    desc: 'Implemented 15+ insert/delete operations', time: 'Yesterday', color: '#f59e0b' },
-    { action: 'Quiz: Hash Tables',           desc: 'Scored 80% on Hash Table challenge', time: '2 days ago', color: '#ef4444' },
-  ];
+  const recentActivity = userStats.history.length > 0
+    ? userStats.history.slice(0, 4).map((h, i) => ({
+        action: `Completed Quiz: ${h.topic}`,
+        desc: `Scored ${h.score} on the evaluation module`,
+        time: h.date || 'Recent',
+        color: h.score && parseInt(h.score) >= 70 ? '#10b981' : '#f59e0b'
+      }))
+    : [
+        { action: 'Mastered Binary Search Tree', desc: 'Completed visualization & quiz with 90%', time: '2h ago', color: '#10b981' },
+        { action: 'Read: Memory Management',     desc: 'Deep-dive in Code Visualizer notebook', time: '5h ago', color: '#3b82f6' },
+        { action: 'Practice: Circular Queue',    desc: 'Implemented 15+ insert/delete operations', time: 'Yesterday', color: '#f59e0b' },
+        { action: 'Quiz: Hash Tables',           desc: 'Scored 80% on Hash Table challenge', time: '2 days ago', color: '#ef4444' },
+      ];
 
   const courses = [
-    { name: 'Linear Data Structures',    progress: 85, color: '#3b82f6' },
-    { name: 'Non-Linear (Trees/Graphs)', progress: 40, color: '#8b5cf6' },
-    { name: 'Memory & Pointers',         progress: 65, color: '#f59e0b' },
-    { name: 'Algorithm Complexity',      progress: 20, color: '#10b981' },
+    { name: 'Linear Data Structures',    progress: userStats.visualizations > 0 ? Math.min(100, 20 + userStats.visualizations * 15) : 85, color: '#3b82f6' },
+    { name: 'Non-Linear (Trees/Graphs)', progress: userStats.quizzesTaken > 0 ? Math.min(100, 10 + userStats.quizzesTaken * 25) : 40, color: '#8b5cf6' },
+    { name: 'Memory & Pointers',         progress: userStats.visualizations > 1 ? Math.min(100, 30 + userStats.visualizations * 10) : 65, color: '#f59e0b' },
+    { name: 'Algorithm Complexity',      progress: userStats.avgScore > 75 ? 80 : 20, color: '#10b981' },
   ];
 
   const quickLinks = [

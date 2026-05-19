@@ -32,7 +32,6 @@ const structureInfo = {
   tree: { title: 'Binary Tree', subtitle: 'Hierarchical structure with parent-child relationships', maxSize: 7 },
   bst: { title: 'Binary Search Tree', subtitle: 'Left is smaller, right is larger', maxSize: 7 },
   avl: { title: 'AVL Tree', subtitle: 'Self balancing binary search tree', maxSize: 7 },
-  redblack: { title: 'Red-Black Tree', subtitle: 'Self balancing via coloring rules', maxSize: 7 },
   trie: { title: 'Trie (Prefix Tree)', subtitle: 'Tree optimized for string search', maxSize: 7 },
   graph: { title: 'Graph (Adj List)', subtitle: 'Network of vertices connected by edges via lists', maxSize: 5 },
   graph_matrix: { title: 'Graph (Adj Matrix)', subtitle: 'Network of vertices connected by edges via matrices', maxSize: 4 },
@@ -83,7 +82,6 @@ const VisualizerPage = () => {
       case 'tree':
       case 'bst':
       case 'avl':
-      case 'redblack':
         setData([50, 30, 70, 20, 40, 60, 80]);
         break;
       case 'minheap':
@@ -285,7 +283,6 @@ const VisualizerPage = () => {
       case 'circular_linkedlist': return <DoublyLinkedListVisualizer {...commonProps} circular={true} />;
       case 'tree': return <TreeVisualizer {...commonProps} />;
       case 'bst': return <TreeVisualizer {...commonProps} />;
-      case 'redblack': return <ExtendedTreeVisualizer {...commonProps} type="redblack" />;
       case 'graph': return <GraphVisualizer {...commonProps} />;
       case 'graph_matrix': return <GraphMatrixVisualizer {...commonProps} />;
       case 'hashtable': return <HashTableVisualizer {...commonProps} />;

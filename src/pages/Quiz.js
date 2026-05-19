@@ -31,18 +31,25 @@ const Quiz = () => {
   const fetchQuestions = async () => {
     setIsLoading(true);
     try {
-      // Fetch 10 multiple choice questions from OpenTDB (Category 18: Computer Science)
-      const res = await fetch('https://opentdb.com/api.php?amount=10&category=18&type=multiple');
+      // DS Keywords to filter by
+      const dsKeywords = ['array', 'stack', 'queue', 'linked list', 'tree', 'binary', 'graph', 'sort', 'algorithm', 'complexity', 'bit', 'data structure', 'hash', 'heap', 'search', 'recursion'];
+      
+      // Fetch 50 multiple choice questions from OpenTDB (Category 18: Computer Science) to get a good pool
+      const res = await fetch('https://opentdb.com/api.php?amount=50&category=18&type=multiple');
       const data = await res.json();
       
-      const formattedQuestions = data.results.map((q) => {
-        // Decode HTML entities (OpenTDB returns html encoded text)
-        const decodeHtml = (html) => {
-          const txt = document.createElement("textarea");
-          txt.innerHTML = html;
-          return txt.value;
-        };
-        
+      const decodeHtml = (html) => {
+        const txt = document.createElement("textarea");
+        txt.innerHTML = html;
+        return txt.value;
+      };
+
+      const filteredQuestions = data.results.filter(q => {
+        const fullText = (q.question + q.category).toLowerCase();
+        return dsKeywords.some(keyword => fullText.includes(keyword));
+      });
+
+      const formattedQuestions = filteredQuestions.slice(0, 10).map((q) => {
         const decodedQuestion = decodeHtml(q.question);
         const correct = decodeHtml(q.correct_answer);
         const incorrect = q.incorrect_answers.map(decodeHtml);
@@ -53,21 +60,27 @@ const Quiz = () => {
         options.splice(answerIdx, 0, correct);
         
         return {
-          topic: q.category || 'Computer Science',
+          topic: 'Data Structures & Algorithms',
           question: decodedQuestion,
           options: options,
           answer: answerIdx,
-          explanation: `The correct answer is ${correct}.`
+          explanation: `The correct answer is indeed "${correct}".`
         };
       });
       
-      if (formattedQuestions.length === 0) throw new Error("No questions fetched");
-      setQuizQuestions(formattedQuestions);
+      // If we didn't find enough online, mix with high-quality local DS questions
+      if (formattedQuestions.length < 5) {
+        const localNeeded = 10 - formattedQuestions.length;
+        const localShuffled = [...QUIZ_BANK].sort(() => 0.5 - Math.random()).slice(0, localNeeded);
+        setQuizQuestions([...formattedQuestions, ...localShuffled]);
+      } else {
+        setQuizQuestions(formattedQuestions);
+      }
     } catch (err) {
       console.error(err);
-      // Fallback local bank if offline
-      const shuffled = [...QUIZ_BANK].sort(() => 0.5 - Math.random());
-      setQuizQuestions(shuffled.slice(0, 10));
+      // Fallback local bank
+      const shuffled = [...QUIZ_BANK].sort(() => 0.5 - Math.random()).slice(0, 10);
+      setQuizQuestions(shuffled);
     } finally {
       setIsLoading(false);
     }

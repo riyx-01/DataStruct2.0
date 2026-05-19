@@ -24,15 +24,28 @@ const SandboxChallenges = () => {
 
   // Initialize Pyodide Native Execution
   useEffect(() => {
-    let script = document.createElement('script');
-    script.src = "https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js";
-    script.onload = async () => {
-      const p = await window.loadPyodide();
-      setPyodide(p);
+    let isMounted = true;
+    const initPyodide = async () => {
+      try {
+        // Wait for script to be ready if not already
+        let attempts = 0;
+        while (!window.loadPyodide && attempts < 50) {
+          await new Promise(r => setTimeout(r, 100));
+          attempts++;
+        }
+
+        if (window.loadPyodide) {
+          const p = await window.loadPyodide();
+          if (isMounted) setPyodide(p);
+        } else {
+          setErrorMSG("Failed to load Python Runtime. Please check your internet connection.");
+        }
+      } catch (e) {
+        if (isMounted) setErrorMSG("WASM Initialization Error: " + e.message);
+      }
     };
-    document.body.appendChild(script);
-    
-    return () => { document.body.removeChild(script); };
+    initPyodide();
+    return () => { isMounted = false; };
   }, []);
 
   const runCode = async () => {

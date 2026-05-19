@@ -38,7 +38,6 @@ const Sidebar = ({ user, setUser }) => {
     // Trees
     { path: '/visualizer/tree', label: 'Binary Tree' },
     { path: '/visualizer/bst', label: 'Binary Search Tree' },
-    { path: '/visualizer/redblack', label: 'Red-Black Tree' },
     { path: '/visualizer/heap', label: 'Max Heap' },
     { path: '/visualizer/minheap', label: 'Min Heap' },
     // Graphs & Hashes

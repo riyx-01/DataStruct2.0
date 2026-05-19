@@ -1,144 +1,222 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
+// Force reload for UI updates
 import { motion, AnimatePresence } from 'framer-motion';
+import Editor from '@monaco-editor/react';
+import Hyperspeed from '../components/ui/Hyperspeed';
 import { 
   Play, Pause, RotateCcw, SkipForward, SkipBack, Terminal, 
   Database, ChevronRight, Activity, Box, AlertCircle, Code, Camera, RefreshCw, Layers, Eye, Ghost, Info
 } from 'lucide-react';
+
 import './CodeVisualizerPage.css';
 
-// ==================== TRANSPILER ====================
-const transpileToJS = (rawCode, language) => {
-  if (language === 'javascript') return rawCode;
-  
-  let lines = rawCode.split('\n').map(line => {
-    const s = line.trim();
-    if (s.match(/^(#include|using\s+namespace|namespace\s|package\s|import\s|#define)/)) return '// ' + line;
-    return line;
-  });
-  
-  let newLines = [];
-  
-  if (language === 'python') {
-    let indentStack = [];
-    for (let i = 0; i < lines.length; i++) {
-        let line = lines[i];
-        let stripped = line.trim();
-        if (!stripped) { newLines.push(line); continue; }
-        if (stripped.startsWith('#')) { newLines.push(line.replace('#', '//')); continue; }
-        
-        let indent = line.search(/\S/);
-        let closeBraces = '';
-        while (indentStack.length > 0 && indent <= indentStack[indentStack.length - 1]) {
-            if (indent === indentStack[indentStack.length - 1] && stripped.match(/^(elif|else)\b/)) {
-                indentStack.pop(); closeBraces += '} '; break;
-            }
-            if (indent === indentStack[indentStack.length - 1]) break;
-            indentStack.pop(); closeBraces += '} ';
-        }
-        let jsLine = line;
-        if (jsLine.includes('#')) jsLine = jsLine.split('#')[0] + '//' + jsLine.split('#').slice(1).join('#');
-        jsLine = jsLine.replace(/\bprint\((.*)\)/, 'console.log($1)');
-        jsLine = jsLine.replace(/\bdef\s+(\w+)\s*\((.*?)\)\s*:/, 'function $1($2) {');
-        jsLine = jsLine.replace(/\bclass\s+(\w+)(.*?)\s*:/, 'class $1 {');
-        jsLine = jsLine.replace(/\bself\./g, 'this.');
-        jsLine = jsLine.replace(/\b__init__\b/, 'constructor');
-        jsLine = jsLine.replace(/\bfor\s+(\w+)\s+in\s+range\(\s*len\(\s*(\w+)\s*\)\s*\)\s*:/, 'for(let $1=0; $1<$2.length; $1++) {');
-        jsLine = jsLine.replace(/\bfor\s+(\w+)\s+in\s+range\(\s*(.*?)\s*\)\s*:/, 'for(let $1=0; $1<$2; $1++) {');
-        jsLine = jsLine.replace(/\bwhile\s+(.*?)\s*:/, 'while($1) {');
-        jsLine = jsLine.replace(/\bif\s+(.*?)\s*:/, 'if($1) {');
-        jsLine = jsLine.replace(/\belif\s+(.*?)\s*:/, 'else if($1) {');
-        jsLine = jsLine.replace(/\belse\s*:/, 'else {');
-        jsLine = jsLine.replace(/\bTrue\b/g, 'true').replace(/\bFalse\b/g, 'false').replace(/\bNone\b/g, 'null');
-        jsLine = jsLine.replace(/\.\s*append\s*\(/g, '.push(');
-        if (jsLine.trim().endsWith('{')) indentStack.push(indent);
-        newLines.push(closeBraces + jsLine);
-    }
-    let remainingBraces = '';
-    while (indentStack.length > 0) { indentStack.pop(); remainingBraces += '} '; }
-    if (newLines.length > 0) newLines[(newLines.length - 1)] += remainingBraces;
-    return newLines.join('\n');
-  }
+// ==================== EXECUTION ENGINE ====================
 
-  if (language === 'java' || language === 'cpp') {
-      for (let i = 0; i < lines.length; i++) {
-          let jsLine = lines[i];
-          let stripped = jsLine.trim();
-          if (stripped.match(/^(#include|using\s+namespace|package\s|import\s|namespace\s|#define)/)) { newLines.push('// ' + jsLine); continue; }
-          if (jsLine.includes('cout')) {
-              let parts = jsLine.split('<<').map(p => p.replace('cout', '').replace(/endl/g, '').replace(';', '').trim()).filter(p => !!p);
-              if (parts.length > 0) { jsLine = `console.log(${parts.join(', ')});`; }
-          }
-          jsLine = jsLine.replace(/\b(?:std::)?vector<\w+>\s+(\w+)\s*=\s*\{(.*?)\}\s*;/g, 'let $1 = [$2];');
-          jsLine = jsLine.replace(/\b(?:int|float|double|boolean|bool|long|String)\s+(?:\[\]\s*)?(\w+)(?:\s*\[\])?\s*=\s*\{(.*?)\}\s*;/g, 'let $1 = [$2];');
-          jsLine = jsLine.replace(/\b(?:int|float|double|boolean|bool|long|char|String|auto|Node|Tree)\s+(\w+)\s*=/g, 'let $1 =');
-          jsLine = jsLine.replace(/\b(?:int|float|double|boolean|bool|long|char|String|auto)\s+(\w+)\s*;/g, 'let $1;');
-          jsLine = jsLine.replace(/\bSystem\.out\.print(?:ln)?\((.*?)\)\s*;/g, 'console.log($1);');
-          jsLine = jsLine.replace(/\.(push_back|add)\(/g, '.push(');
-          jsLine = jsLine.replace(/\.(size|length)\(\)/g, '.length');
-          jsLine = jsLine.replace(/\bpublic\s+class\s+\w+\s*\{/g, '/* class wrapper */ {');
-          jsLine = jsLine.replace(/\b(?:public\s+)?(?:static\s+)?(?:void|int)\s+main\s*\(.*?\)\s*\{/g, 'function main() {');
-          newLines.push(jsLine);
-      }
-      let finalCode = newLines.join('\n');
-      if (finalCode.includes('function main()')) finalCode += '\nmain();';
-      return finalCode;
-  }
-  return rawCode;
+const __clone = (obj) => {
+  if (!obj || typeof obj !== 'object') return obj;
+  return JSON.parse(JSON.stringify(obj));
 };
 
-// ==================== EXECUTION ENGINE ====================
-const __clone = (val, seen = new WeakMap()) => {
-  if (val === null || typeof val !== 'object') return val;
-  if (seen.has(val)) return `[Circular REF]`;
-  seen.set(val, true);
-  if (Array.isArray(val)) return val.map(item => __clone(item, seen));
-  const clone = {};
-  for (let key in val) {
-    if (Object.prototype.hasOwnProperty.call(val, key)) { clone[key] = __clone(val[key], seen); }
-  }
-  return clone;
+const convertHashComments = (text) => {
+  const lines = text.split('\n');
+  const processedLines = lines.map(line => {
+    let inSingleQuote = false;
+    let inDoubleQuote = false;
+    let inBacktick = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === "'" && !inDoubleQuote && !inBacktick) inSingleQuote = !inSingleQuote;
+      else if (char === '"' && !inSingleQuote && !inBacktick) inDoubleQuote = !inDoubleQuote;
+      else if (char === '`' && !inSingleQuote && !inDoubleQuote) inBacktick = !inBacktick;
+      else if (char === '#' && !inSingleQuote && !inDoubleQuote && !inBacktick) {
+        return line.substring(0, i) + '//' + line.substring(i + 1);
+      }
+    }
+    return line;
+  });
+  return processedLines.join('\n');
+};
+
+const simulateExecution = (rawCode, language) => {
+  const lines = rawCode.split('\n');
+  const history = [];
+  const variables = {};
+  const memoryStructures = { arrays: {}, trees: {}, graphs: {}, stacks: {} };
+  let currentOutput = [];
+  
+  lines.forEach((rawLine, idx) => {
+    const lineNum = idx + 1;
+    const line = rawLine.trim();
+    if (!line || line.startsWith('//') || line.startsWith('#') || line.startsWith('/*') || line.startsWith('*')) {
+      return;
+    }
+    
+    let why = "Executing logical instruction.";
+    
+    // Check if line is a print statement
+    if (line.includes('print(') || line.includes('console.log')) {
+      why = "Standard Output: Broadcasting internal state to the virtual console.";
+      
+      const printMatch = line.match(/(?:print|console\.log)\(([^)]*)\)/);
+      if (printMatch) {
+        const argsStr = printMatch[1];
+        
+        // Simple comma splitter that avoids splitting inside strings
+        const args = [];
+        let currentArg = "";
+        let inSingleQuote = false;
+        let inDoubleQuote = false;
+        for (let i = 0; i < argsStr.length; i++) {
+          const char = argsStr[i];
+          if (char === "'" && !inDoubleQuote) inSingleQuote = !inSingleQuote;
+          else if (char === '"' && !inSingleQuote) inDoubleQuote = !inDoubleQuote;
+          
+          if (char === ',' && !inSingleQuote && !inDoubleQuote) {
+            args.push(currentArg.trim());
+            currentArg = "";
+          } else {
+            currentArg += char;
+          }
+        }
+        if (currentArg.trim()) {
+          args.push(currentArg.trim());
+        }
+        
+        const resolvedArgs = args.map(arg => {
+          if ((arg.startsWith('"') && arg.endsWith('"')) || (arg.startsWith("'") && arg.endsWith("'"))) {
+            return arg.slice(1, -1);
+          }
+          if (variables[arg] !== undefined) return String(variables[arg]);
+          if (memoryStructures.arrays[arg] !== undefined) return JSON.stringify(memoryStructures.arrays[arg]);
+          if (memoryStructures.trees[arg] !== undefined) return '[Binary Tree]';
+          return arg;
+        });
+        currentOutput.push(resolvedArgs.join(' '));
+      }
+    }
+    // Check for push or append (support spaces, e.g. queue. append)
+    else if (line.includes('arr.push') || line.includes('.push') || line.includes('.append')) {
+      why = "Heap Push: Growing a dynamic structure dynamically in memory.";
+      const appendMatch = line.match(/(\w+)\.\s*(?:append|push)\(([^)]*)\)/);
+      if (appendMatch) {
+        const name = appendMatch[1];
+        const valStr = appendMatch[2].trim();
+        const val = isNaN(valStr) ? (valStr.replace(/['"]/g, '') || '') : Number(valStr);
+        if (!memoryStructures.arrays[name]) {
+          memoryStructures.arrays[name] = [];
+        }
+        memoryStructures.arrays[name] = [...memoryStructures.arrays[name], val];
+      }
+    }
+    // Check for pop (support spaces, e.g. queue. pop)
+    else if (line.includes('.pop(') || line.includes('.pop0') || line.includes('.pop(0)')) {
+      why = "Heap Pop: Dequeuing or removing an element from the dynamic structure.";
+      const popMatch = line.match(/(\w+)\.\s*pop\(([^)]*)\)/);
+      if (popMatch) {
+        const name = popMatch[1];
+        const arg = popMatch[2].trim();
+        if (memoryStructures.arrays[name]) {
+          const arrCopy = [...memoryStructures.arrays[name]];
+          if (arg === '0') {
+            arrCopy.shift();
+          } else {
+            arrCopy.pop();
+          }
+          memoryStructures.arrays[name] = arrCopy;
+        }
+      }
+    }
+    // Check tree node allocation
+    else if (line.includes('root =') || line.includes('Node(') || line.includes('new Node')) {
+      why = "Memory Allocation: Creating a new object in the heap. This allocates space for value and child pointers.";
+      
+      const treeMatch = line.match(/(\w+)\s*=\s*(?:new\s+)?Node\(([^)]*)\)/);
+      if (treeMatch) {
+        const name = treeMatch[1];
+        const valStr = treeMatch[2].trim();
+        const val = isNaN(valStr) ? (valStr.replace(/['"]/g, '') || 10) : Number(valStr);
+        memoryStructures.trees[name] = { val: val, left: null, right: null };
+      }
+      
+      const treeLeftRightMatch = line.match(/(\w+)\.(left|right)\s*=\s*(?:new\s+)?Node\(([^)]*)\)/);
+      if (treeLeftRightMatch) {
+        const parentName = treeLeftRightMatch[1];
+        const childSide = treeLeftRightMatch[2];
+        const valStr = treeLeftRightMatch[3].trim();
+        const val = isNaN(valStr) ? (valStr.replace(/['"]/g, '') || 5) : Number(valStr);
+        if (memoryStructures.trees[parentName]) {
+          const parentCopy = __clone(memoryStructures.trees[parentName]);
+          parentCopy[childSide] = { val: val, left: null, right: null };
+          memoryStructures.trees[parentName] = parentCopy;
+        }
+      }
+    }
+    else if (line.includes('return')) {
+      why = "Returning Control: Exiting current frame and passing value back to the caller.";
+    }
+    else if (line.includes('.left') || line.includes('.right')) {
+      why = "Pointer Update: Modifying the link between nodes. This changes the structural topology of the tree.";
+    }
+    else if (line.includes('.next')) {
+      why = "Linked Connection: Updating the directional edge in the list structure.";
+    }
+    else if (line.includes('for ') || line.includes('while ')) {
+      why = "Iterative Branch: Evaluating the loop guard to decide if another iteration is required.";
+    }
+    else if (line.includes('if ')) {
+      why = "Logical Fork: Evaluating a boolean predicate to fork execution path.";
+    }
+    else if (line.includes('=')) {
+      why = "State Mutation: Binding a new value to a variable descriptor in the current stack frame.";
+      
+      const assignMatch = line.match(/(?:let|const|var)?\s*(\w+)\s*=\s*(.*)/);
+      if (assignMatch) {
+        const name = assignMatch[1];
+        let valStr = assignMatch[2].trim();
+        if (valStr.endsWith(';')) valStr = valStr.slice(0, -1);
+        if (valStr === '[]') {
+          memoryStructures.arrays[name] = [];
+        } else if (valStr.startsWith('[') && valStr.endsWith(']')) {
+          try {
+            const validJsonStr = valStr.replace(/'/g, '"');
+            memoryStructures.arrays[name] = JSON.parse(validJsonStr);
+          } catch {
+            memoryStructures.arrays[name] = [];
+          }
+        } else {
+          const num = Number(valStr);
+          variables[name] = isNaN(num) ? valStr.replace(/['"]/g, '') : num;
+        }
+      }
+    }
+    
+    history.push({
+      line: lineNum,
+      code: line,
+      variables: __clone(variables),
+      memoryStructures: __clone(memoryStructures),
+      why: why,
+      deletedElements: [],
+      output: [...currentOutput]
+    });
+  });
+  
+  return history;
 };
 
 const compileAndRun = (rawCode, language) => {
-  const code = transpileToJS(rawCode, language);
   const history = [];
-  let variablesSet = new Set();
+  const code = convertHashComments(rawCode);
   
-  if (!window.Babel) throw new Error("Babel standalone is not loaded.");
-
-  const extractVarsPlugin = function() {
-    return {
-      visitor: {
-        Identifier(path) {
-          if (path.parentPath.isVariableDeclarator({ id: path.node }) || 
-              path.parentPath.isFunctionDeclaration({ id: path.node }) ||
-              path.parentPath.isAssignmentExpression({ left: path.node }) ||
-              path.parentPath.isClassDeclaration({ id: path.node })) {
-                variablesSet.add(path.node.name);
-          }
-        }
-      }
-    };
-  };
-
-  try {
-    window.Babel.transform(code, { plugins: [extractVarsPlugin], filename: 'extract.js' });
-  } catch (e) { throw new Error("Syntax error: " + e.message); }
-
-  const reserved = new Set(['console', 'Math', 'Array', 'Object', 'String', 'Number', 'JSON', 'window', 'document', '__trace', '__clone', 'history', 'variablesSet', 'let']);
-  const vars = [...variablesSet].filter(v => !reserved.has(v));
-  const varsObjString = "({ " + vars.map(v => `"${v}": (() => { try { return __clone(${v}); } catch(e) { return undefined; } })()`).join(", ") + " })";
-
-  const instrumentPlugin = function({ types: t }) {
+  const instrumentPlugin = ({ types: t }) => {
     return {
       visitor: {
         Statement(path) {
-          if (path.isBlockStatement() || path.isClassMethod() || path.isFunctionDeclaration()) return;
           if (!path.node.loc || path.node.__injected) return;
           if (!path.parentPath.isBlockStatement() && !path.parentPath.isProgram()) return;
           const line = path.node.loc.start.line;
           try {
-            const traceStmt = t.expressionStatement(t.callExpression(t.identifier('__trace'), [t.numericLiteral(line), t.callExpression(t.identifier('eval'), [t.stringLiteral(varsObjString)])]));
+            const traceStmt = t.expressionStatement(t.callExpression(t.identifier('__trace'), [t.numericLiteral(line), t.callExpression(t.identifier('eval'), [t.stringLiteral('({ ...typeof this !== "undefined" ? this : {}, ...typeof arguments !== "undefined" ? arguments : {}, ...((() => { try { return Object.fromEntries(Object.entries(eval("this") || {})); } catch { return {}; } })()) })') ] )]));
             traceStmt.__injected = true;
             path.insertAfter(traceStmt);
           } catch(e) { console.error(e); }
@@ -148,90 +226,102 @@ const compileAndRun = (rawCode, language) => {
   };
 
   let instrumentedCode = "";
-  try {
-    instrumentedCode = window.Babel.transform(code, { plugins: [instrumentPlugin], filename: 'visualizer.js' }).code;
-  } catch(e) { throw new Error("Instrumentation Error: " + e.message); }
-
-  let currentOutput = [];
-  let stepCount = 0;
+  let success = false;
   
-  const __trace = (line, scope) => {
-    if (stepCount++ > 3000) throw new Error("Infinite loop detected.");
-    const variables = {};
-    const memoryStructures = { arrays: {}, trees: {}, graphs: {}, stacks: {} };
+  if (language === 'javascript') {
+    try {
+      instrumentedCode = window.Babel.transform(code, { plugins: [instrumentPlugin], filename: 'visualizer.js' }).code;
+      
+      let currentOutput = [];
+      let stepCount = 0;
+      
+      const __trace = (line, scope) => {
+        if (stepCount++ > 3000) throw new Error("Infinite loop detected.");
+        const variables = {};
+        const memoryStructures = { arrays: {}, trees: {}, graphs: {}, stacks: {} };
 
-    for (let key in scope) {
-      const val = scope[key];
-      if (val === undefined || typeof val === 'function') continue;
-      if (Array.isArray(val)) { memoryStructures.arrays[key] = val; }
-      else if (typeof val === 'object' && val !== null) {
-         if ('left' in val || 'right' in val || 'value' in val || 'val' in val) memoryStructures.trees[key] = val;
-         else if ('next' in val) memoryStructures.graphs[key] = val;
-         else variables[key] = val;
-      } else variables[key] = val;
+        for (let key in scope) {
+          const val = scope[key];
+          if (val === undefined || typeof val === 'function') continue;
+          if (Array.isArray(val)) { memoryStructures.arrays[key] = __clone(val); }
+          else if (typeof val === 'object' && val !== null) {
+             if ('left' in val || 'right' in val || 'value' in val || 'val' in val) memoryStructures.trees[key] = __clone(val);
+             else if ('next' in val) memoryStructures.graphs[key] = __clone(val);
+             else variables[key] = val;
+          } else variables[key] = val;
+        }
+
+        const codeLine = rawCode.split('\n')[line - 1]?.trim() || '';
+        let why = "Executing logical instruction.";
+        
+        // Semantic Heuristics for X-Ray
+        if (codeLine.includes('root =') || codeLine.includes('Node(')) why = "Memory Allocation: Creating a new object in the heap. This allocates space for value and child pointers.";
+        else if (codeLine.includes('return')) why = "Returning Control: Exiting current frame and passing value back to the caller.";
+        else if (codeLine.includes('.left') || codeLine.includes('.right')) why = "Pointer Update: Modifying the link between nodes. This changes the structural topology of the tree.";
+        else if (codeLine.includes('.next')) why = "Linked Connection: Updating the directional edge in the list structure.";
+        else if (codeLine.includes('arr.push') || codeLine.includes('.push')) why = "Heap Push: Growing a dynamic array. This may trigger an O(N) resize if capacity is reached.";
+        else if (codeLine.includes('for') || codeLine.includes('while')) why = "Iterative Branch: Evaluating the loop guard to decide if another iteration is required.";
+        else if (codeLine.includes('if')) why = "Logical Fork: Evaluating a boolean predicate to fork execution path.";
+        else if (codeLine.includes('=')) why = "State Mutation: Binding a new value to a variable descriptor in the current stack frame.";
+        else if (codeLine.includes('console.log')) why = "Standard Output: Broadcasting internal state to the virtual console.";
+
+        history.push({
+          line,
+          code: codeLine,
+          variables,
+          memoryStructures,
+          why,
+          deletedElements: [],
+          output: [...currentOutput]
+        });
+      };
+
+      const fakeConsole = { log: (...args) => { currentOutput.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')); } };
+      
+      const fn = new Function('__trace', '__clone', 'console', instrumentedCode);
+      fn(__trace, __clone, fakeConsole);
+      success = history.length > 0;
+    } catch(e) { 
+      console.warn("Babel execution failed, utilizing simulator instead:", e.message);
     }
+  }
 
-    const codeLine = rawCode.split('\n')[line - 1]?.trim() || '';
-    let why = "Executing logical instruction.";
-    if (codeLine.includes('root =') || codeLine.includes('Node(')) why = "Instantiating memory node block in heap space.";
-    if (codeLine.includes('.left') || codeLine.includes('.right')) why = "Updating child reference pointers to re-balance or extend the tree topology.";
-    if (codeLine.includes('arr.push') || codeLine.includes('.push')) why = "Dynamic memory allocation: Appending value to contiguous memory block.";
-    if (codeLine.includes('for') || codeLine.includes('while')) why = "Looping structure: Re-evaluating condition for iterative execution.";
-
-    history.push({
-      line,
-      code: codeLine,
-      variables,
-      memoryStructures,
-      why,
-      output: [...currentOutput]
-    });
-  };
-
-  const fakeConsole = { log: (...args) => { currentOutput.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')); } };
-  try {
-    const fn = new Function('__trace', '__clone', 'console', instrumentedCode);
-    fn(__trace, __clone, fakeConsole);
-  } catch (e) { if (history.length === 0) throw e; }
-  return history;
+  if (success) {
+    return history;
+  }
+  
+  return simulateExecution(rawCode, language);
 };
 
 // ==================== LIQUID GLASS RENDERERS ====================
 
-const GlassArray = ({ name, arr, isXRay }) => (
+const GlassArray = ({ name, arr }) => (
   <div className="iso-glass-container">
-    <div className="iso-title">Array / Stack : <span>{name}</span> {isXRay && <span className="xray-addr-main">[ADDR: 0xFD40{name.length}]</span>}</div>
+    <div className="iso-title">Array / Stack : <span>{name}</span></div>
     <div className="iso-array">
       {arr.map((val, idx) => (
         <div key={idx} className="iso-array-cell">
            <div className="iso-cell-value">{typeof val === 'object' ? '{...}' : String(val)}</div>
            <div className="iso-cell-index">{idx}</div>
-           {isXRay && (
-             <div className="iso-xray-details">
-                <div className="xray-hex">0x{ (1024 + idx * 8).toString(16).toUpperCase() }</div>
-                <div className="xray-bin">{ Number(val).toString(2).padStart(8, '0').slice(-8) }</div>
-             </div>
-           )}
         </div>
       ))}
     </div>
   </div>
 );
 
-const GlassTree = ({ name, node, isXRay }) => {
-  const renderNode = (n, addr = '0x10A') => {
+const GlassTree = ({ name, node }) => {
+  const renderNode = (n) => {
     if (!n) return null;
     return (
       <div className="iso-tree-node-wrapper">
         <div className="iso-tree-node">
           {n.val !== undefined ? n.val : n.value}
-          {isXRay && <div className="xray-node-addr">{addr}</div>}
         </div>
         <div className="iso-tree-children">
           {(n.left || n.right) && (
             <>
-              <div className="iso-tree-child left">{renderNode(n.left, addr + 'L')}</div>
-              <div className="iso-tree-child right">{renderNode(n.right, addr + 'R')}</div>
+              <div className="iso-tree-child left">{renderNode(n.left)}</div>
+              <div className="iso-tree-child right">{renderNode(n.right)}</div>
             </>
           )}
         </div>
@@ -240,7 +330,9 @@ const GlassTree = ({ name, node, isXRay }) => {
   };
   return (
     <div className="iso-glass-container">
-      <div className="iso-title">Binary Tree : <span>{name}</span></div>
+      <div className="iso-title">
+        Binary Tree : <span>{name}</span>
+      </div>
       <div className="iso-tree-root">{renderNode(node)}</div>
     </div>
   );
@@ -257,8 +349,9 @@ const CodeVisualizer = () => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [speed, setSpeed] = useState(1000);
   const [error, setError] = useState(null);
-  const [isXRay, setIsXRay] = useState(false);
-  const [isGhosting, setIsGhosting] = useState(true);
+  
+  // Feature States
+  const [deletedVault, setDeletedVault] = useState([]);
   
   const [isScanning, setIsScanning] = useState(false);
   const [ocrWarning, setOcrWarning] = useState(null);
@@ -266,6 +359,66 @@ const CodeVisualizer = () => {
   
   const timerRef = useRef(null);
   const fileInputRef = useRef(null);
+  const editorRef = useRef(null);
+  const monacoRef = useRef(null);
+  const decorationsRef = useRef([]);
+
+  const handleEditorDidMount = (editor, monaco) => {
+    editorRef.current = editor;
+    monacoRef.current = monaco;
+    
+    const handleResize = () => {
+       if (editorRef.current) { editorRef.current.layout(); }
+    };
+    window.addEventListener('resize', handleResize);
+    // Trigger initial layout
+    setTimeout(() => editor.layout(), 100);
+  };
+
+  const currentState = tokens[currentStep];
+
+  // Deallocation Tracker
+  useEffect(() => {
+    if (currentStep > 0 && tokens[currentStep-1] && tokens[currentStep]) {
+      const prevArrayKeys = Object.keys(tokens[currentStep-1].memoryStructures.arrays);
+      const currArrayKeys = Object.keys(tokens[currentStep].memoryStructures.arrays);
+      const prevTreeKeys = Object.keys(tokens[currentStep-1].memoryStructures.trees);
+      const currTreeKeys = Object.keys(tokens[currentStep].memoryStructures.trees);
+
+      const newlyDeleted = [];
+      prevArrayKeys.forEach(k => { if (!currArrayKeys.includes(k)) newlyDeleted.push({ name: k, type: 'Array', data: tokens[currentStep-1].memoryStructures.arrays[k], step: currentStep }); });
+      prevTreeKeys.forEach(k => { if (!currTreeKeys.includes(k)) newlyDeleted.push({ name: k, type: 'Tree', data: tokens[currentStep-1].memoryStructures.trees[k], step: currentStep }); });
+
+      if (newlyDeleted.length > 0) {
+        setDeletedVault(prev => {
+          const filtered = prev.filter(p => p.step !== currentStep);
+          return [...filtered, ...newlyDeleted];
+        });
+      }
+    }
+    if (currentStep === 0) setDeletedVault([]);
+  }, [currentStep, tokens]);
+
+  // Monaco Decorations
+  useEffect(() => {
+    if (editorRef.current && monacoRef.current && currentState?.line) {
+      const editor = editorRef.current;
+      const monaco = monacoRef.current;
+      decorationsRef.current = editor.deltaDecorations(decorationsRef.current, [
+        {
+          range: new monaco.Range(currentState.line, 1, currentState.line, 1),
+          options: {
+            isWholeLine: true,
+            className: 'active-line-monaco',
+            glyphMarginClassName: 'active-line-glyph-monaco'
+          }
+        }
+      ]);
+      editor.revealLineInCenter(currentState.line);
+    } else if (editorRef.current && !currentState) {
+      decorationsRef.current = editorRef.current.deltaDecorations(decorationsRef.current, []);
+    }
+  }, [currentState]);
 
   const performCompilation = useCallback(() => {
     try {
@@ -276,7 +429,7 @@ const CodeVisualizer = () => {
     } catch(e) { setError(e.message); setTokens([]); return []; }
   }, [code, language]);
 
-  const reset = useCallback(() => { setCurrentStep(0); setIsPlaying(false); if (timerRef.current) clearInterval(timerRef.current); }, []);
+  const reset = useCallback(() => { setCurrentStep(0); setIsPlaying(false); if (timerRef.current) clearInterval(timerRef.current); setDeletedVault([]); }, []);
 
   useEffect(() => {
     const timeout = setTimeout(() => { performCompilation(); reset(); }, 800);
@@ -295,48 +448,20 @@ const CodeVisualizer = () => {
     }
   }, [isPlaying, speed, tokens.length]);
 
-  const currentState = tokens[currentStep];
-  const ghostStep = (isGhosting && currentStep > 0) ? tokens[currentStep - 1] : null;
-
   const handleScanImage = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    setIsScanning(true); setOcrWarning(null);
+    setIsScanning(true);
     try {
       const worker = window.Tesseract;
-      if (!worker) throw new Error("Offline. OCR unavailable.");
       const { data } = await worker.recognize(file, 'eng');
-      const lowConf = data.words.filter(w => w.confidence < 60);
-      if (lowConf.length > 5) setOcrWarning(`OCR extraction confidence low. Verify ${lowConf.length} tokens.`);
-      setCode(data.text.replace(/‘|’|`|´/g, "'").replace(/“|”/g, '"').replace(/\s@\s/g, ' 0 '));
-    } catch (err) { setError('OCR Failed: ' + err.message); } finally {
-      setIsScanning(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
-    }
+      setCode(data.text.replace(/‘|’|`|´/g, "'").replace(/“|”/g, '"'));
+    } catch (err) { setError('OCR Failed: ' + err.message); } finally { setIsScanning(false); }
   };
-
-  // AUTO-LANGUAGE DETECTION
-  useEffect(() => {
-    const detectLanguage = (text) => {
-      const lower = text.toLowerCase();
-      if (lower.includes('#include') || lower.includes('std::') || lower.includes('cout <<')) return 'cpp';
-      if (lower.includes('public static void main') || lower.includes('system.out.print')) return 'java';
-      if (text.match(/\bdef\s+\w+\(/) || text.match(/\bimport\s+math\b/) || (lower.includes('print(') && !lower.includes('console.log'))) return 'python';
-      if (lower.includes('let ') || lower.includes('const ') || lower.includes('console.log') || lower.includes('function ')) return 'javascript';
-      return null;
-    };
-
-    const timeoutId = setTimeout(() => {
-      const detected = detectLanguage(code);
-      if (detected && detected !== language) {
-        setLanguage(detected);
-      }
-    }, 1000); // 1s debounce
-    return () => clearTimeout(timeoutId);
-  }, [code, language]);
 
   return (
     <div className="cv-container">
+      <Hyperspeed />
       <div className="cv-inner">
         <motion.div initial={{opacity:0, y:-20}} animate={{opacity:1, y:0}} className="cv-header">
           <Terminal className="cv-icon-terminal" size={32} />
@@ -349,36 +474,44 @@ const CodeVisualizer = () => {
         <div className="cv-grid">
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
             <div className="cv-panel">
-              <div className="cv-panel-header">
-                <div className="cv-panel-title"><Code size={16} /> Source Code</div>
-                <div style={{display:'flex', gap:'10px'}}>
-                  <input type="file" ref={fileInputRef} onChange={handleScanImage} accept="image/*" style={{display:'none'}} />
-                  <button onClick={() => fileInputRef.current?.click()} className="cv-btn-icon highlight-camera" disabled={isScanning}>
-                    {isScanning ? <RefreshCw className="spin" size={16} /> : <Camera size={16} />} <span style={{marginLeft:'5px'}}>Scan</span>
-                  </button>
-                  <select value={language} onChange={e => setLanguage(e.target.value)} className="cv-language-select">
-                    <option value="javascript">JS</option><option value="python">Py</option><option value="java">Java</option><option value="cpp">C++</option>
-                  </select>
-                </div>
+               <div className="cv-panel-header">
+                  <div className="cv-panel-title"><Code size={16} /> Source Code</div>
+                  <div style={{display:'flex', gap:'10px'}}>
+                    <input type="file" ref={fileInputRef} onChange={handleScanImage} accept="image/*" style={{display:'none'}} />
+                    <button onClick={() => fileInputRef.current?.click()} className="cv-btn-icon highlight-camera" disabled={isScanning}>
+                      {isScanning ? <RefreshCw className="spin" size={16} /> : <Camera size={16} />} <span style={{marginLeft:'5px'}}>Scan</span>
+                    </button>
+                    <select value={language} onChange={e => setLanguage(e.target.value)} className="cv-language-select">
+                      <option value="javascript">JS</option><option value="python">Py</option><option value="java">Java</option><option value="cpp">C++</option>
+                    </select>
+                  </div>
+               </div>
+               <div className="monaco-editor-container" style={{ borderRadius: '16px', overflow: 'hidden', border: '1px solid rgba(139,92,246,0.3)', boxShadow: 'var(--clay-sm)' }}>
+                 <Editor
+                   height="360px"
+                   language={language === 'cpp' ? 'cpp' : language}
+                   theme="vs-dark"
+                   value={code}
+                   onMount={handleEditorDidMount}
+                   onChange={(val) => setCode(val || '')}
+                   options={{ 
+                    minimap: { enabled: false }, 
+                    fontSize: 14, 
+                    scrollBeyondLastLine: false, 
+                    lineNumbers: 'on', 
+                    roundedSelection: true, 
+                    fontFamily: "'Share Tech Mono', monospace", 
+                    padding: { top: 10, bottom: 10 }, 
+                    automaticLayout: false, 
+                    backgroundColor: '#0d0b14' 
+                  }}
+                />
               </div>
-              <div className="code-editor-wrapper">
-                <div className="code-highlight-layer">
-                  {code.split('\n').map((line, idx) => (
-                    <div key={idx} className={`code-line ${currentState?.line === idx + 1 ? 'active-line' : ''}`}>
-                      <span className="line-num">{idx + 1}</span> {line || ' '}
-                    </div>
-                  ))}
-                </div>
-                <textarea value={code} onChange={e => setCode(e.target.value)} className="code-input-layer" spellCheck="false" />
-              </div>
-              {ocrWarning && <div className="ocr-warning"><AlertCircle size={14}/> {ocrWarning}</div>}
-              {error && <div className="cv-error"><AlertCircle size={16}/> {error}</div>}
+               {error && <div className="cv-error"><AlertCircle size={16}/> {error}</div>}
             </div>
 
             <div className="cv-panel">
                <div className="cv-controls">
-                  <button className="cv-btn cv-btn-secondary" onClick={() => setIsXRay(!isXRay)} style={{color: isXRay ? '#FCEE09' : '#0FF0FC'}}><Eye size={16}/> X-Ray</button>
-                  <button className="cv-btn cv-btn-secondary" onClick={() => setIsGhosting(!isGhosting)} style={{color: isGhosting ? '#FF003C' : '#0FF0FC'}}><Ghost size={16}/> Ghost</button>
                   <button className="cv-btn cv-btn-secondary" onClick={reset}><RotateCcw size={16}/> Reset</button>
                   <button className="cv-btn cv-btn-warning" onClick={() => { setIsPlaying(false); setCurrentStep(Math.max(0, currentStep - 1)) }} disabled={currentStep === 0}><SkipBack size={16}/> Undo</button>
                   {isPlaying ? (
@@ -399,7 +532,7 @@ const CodeVisualizer = () => {
           </div>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-             <div className="cv-panel execution-tracker">
+              <div className="cv-panel execution-tracker">
                 <div className="cv-panel-title" style={{justifyContent: 'space-between'}}>
                    <div style={{display:'flex', alignItems:'center', gap: '8px'}}><Activity size={16}/> Execution Trace</div>
                    <div className="why-indicator" onMouseEnter={() => setShowExplanation(true)} onMouseLeave={() => setShowExplanation(false)}>
@@ -414,10 +547,17 @@ const CodeVisualizer = () => {
                       </AnimatePresence>
                    </div>
                 </div>
-                <div className="cv-code-block" style={{marginTop:'10px', fontSize:'14px'}}>
-                   {currentState ? `[L${currentState.line}] :: ${currentState.code}` : "AWAITING COMPILATION..."}
+                 <div className="cv-code-block" style={{marginTop:'10px', fontSize:'14px', position: 'relative'}}>
+                    {currentState ? `[L${currentState.line}] :: ${currentState.code}` : "AWAITING COMPILATION..."}
+                 </div>
+              </div>
+
+              <div className="cv-panel explainable-ai-panel">
+                <div className="cv-panel-title"><Info size={16}/> Explainable AI</div>
+                <div className="cv-code-block" style={{marginTop:'10px', fontSize:'14px', position: 'relative', borderColor: '#10b981', color: '#10b981', background: 'rgba(16, 185, 129, 0.1)'}}>
+                  {currentState?.why || "Awaiting execution..."}
                 </div>
-             </div>
+              </div>
 
              {currentState && (
                <>
@@ -425,30 +565,40 @@ const CodeVisualizer = () => {
                     <div className="cv-panel-title"><Layers size={16}/> Memory Heap Topology</div>
                     <div className="render-canvas">
                         <div className="visual-layers-stack">
-                           {/* Ghost Layer */}
-                           <div className="layer ghost-layer" style={{ display: isGhosting && ghostStep ? 'block' : 'none' }}>
-                              {ghostStep && (
-                                <>
-                                  {Object.entries(ghostStep.memoryStructures.arrays).map(([name, arr]) => <GlassArray key={name} name={name} arr={arr} isXRay={isXRay} />)}
-                                  {Object.entries(ghostStep.memoryStructures.trees).map(([name, node]) => <GlassTree key={name} name={name} node={node} isXRay={isXRay} />)}
-                                </>
-                              )}
-                           </div>
-                           {/* Current Layer */}
                            <div className="layer current-layer">
-                              {Object.entries(currentState.memoryStructures.arrays).map(([name, arr]) => <GlassArray key={name} name={name} arr={arr} isXRay={isXRay} />)}
-                              {Object.entries(currentState.memoryStructures.trees).map(([name, node]) => <GlassTree key={name} name={name} node={node} isXRay={isXRay} />)}
+                              {Object.entries(currentState.memoryStructures.arrays).map(([name, arr]) => <GlassArray key={name} name={name} arr={arr} />)}
+                              {Object.entries(currentState.memoryStructures.trees).map(([name, node]) => <GlassTree key={name} name={name} node={node} />)}
                            </div>
                         </div>
                     </div>
                  </div>
 
+                 {deletedVault.length > 0 && (
+                    <div className="cv-panel vault-panel">
+                       <div className="cv-panel-title"><Database size={16}/> DEALLOCATION VAULT (Deleted Nodes)</div>
+                       <div className="vault-grid">
+                          {deletedVault.map((item, i) => (
+                            <div key={i} className="vault-item">
+                               <div className="vault-item-header">
+                                  <span>{item.name} ({item.type})</span>
+                                  <span className="vault-step">Step {item.step}</span>
+                               </div>
+                               <div className="vault-preview">
+                                  {item.type === 'Array' ? <GlassArray name={item.name} arr={item.data} /> : <GlassTree name={item.name} node={item.data} />}
+                               </div>
+                            </div>
+                          ))}
+                       </div>
+                    </div>
+                 )}
+
                  {currentState.output.length > 0 && (
-                   <div className="cv-panel"><div className="cv-panel-title"><Terminal size={16}/> Console Log</div>
-                     <div className="cv-console">
-                        {currentState.output.map((out, i) => (<div key={i} className="cv-console-line"><span className="cv-console-prompt">$</span> <span className="cv-console-text">{out}</span></div>))}
-                     </div>
-                   </div>
+                    <div className="cv-panel">
+                      <div className="cv-panel-title"><Terminal size={16}/> Console Log</div>
+                      <div className="cv-console">
+                        {currentState.output.map((out, j) => (<div key={j} className="cv-console-line"><span className="cv-console-prompt">$</span> <span className="cv-console-text">{out}</span></div>))}
+                      </div>
+                    </div>
                  )}
                </>
              )}

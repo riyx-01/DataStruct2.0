@@ -1,38 +1,39 @@
-/* Sandbox – Claymorphism */
+/* Sandbox – Glassmorphic Rain Theme */
 .sandbox-container { padding:40px; min-height:100vh; background:transparent; }
 .sandbox-header { margin-bottom:22px; }
-.sandbox-header h1 { font-size:1.9rem; font-weight:900; color:#f1eeff; margin-bottom:8px; }
-.sandbox-header p  { color:#9d8fbf; }
+.sandbox-header h1 { font-size:1.9rem; font-weight:900; color:var(--text-main); margin-bottom:8px; }
+.sandbox-header p  { color:var(--text-muted); }
 
 .sandbox-grid { display:grid; grid-template-columns:1.2fr 1fr; gap:20px; height:calc(100vh - 160px); }
 
 .sb-panel {
-  background:linear-gradient(145deg,#261f3a,#1e1a2e);
-  border:1px solid rgba(139,92,246,0.24); border-radius:24px;
+  background: linear-gradient(145deg, rgba(15, 30, 60, 0.8), rgba(10, 20, 42, 0.8));
+  backdrop-filter: blur(16px);
+  border:1px solid var(--border-color); border-radius:32px;
   display:flex; flex-direction:column; overflow:hidden;
-  box-shadow: 0 10px 0 rgba(0,0,0,0.42), 0 16px 32px rgba(0,0,0,0.58), inset 0 1px 0 rgba(255,255,255,0.07);
+  box-shadow: var(--clay);
 }
 .sb-panel-header {
-  padding:14px 18px; font-weight:800; font-size:0.87rem; color:#c4b5fd;
-  background:rgba(255,255,255,0.04); border-bottom:1px solid rgba(139,92,246,0.18);
+  padding:18px 22px; font-weight:900; font-size:0.9rem; color:var(--primary-light);
+  background:rgba(255,255,255,0.04); border-bottom:1px solid rgba(0, 153, 255, 0.18);
   display:flex; justify-content:space-between; align-items:center;
-  text-transform:uppercase; letter-spacing:0.5px;
+  text-transform:uppercase; letter-spacing:1px;
 }
-.sb-editor { flex:1; width:100%; border:none; background:#0d0b14; color:#c4b5fd; font-family:'Share Tech Mono',monospace; padding:18px; font-size:14px; line-height:1.7; resize:none; outline:none; }
-.sb-controls { padding:12px 14px; background:rgba(255,255,255,0.03); border-top:1px solid rgba(139,92,246,0.16); display:flex; justify-content:flex-end; gap:12px; }
+.sb-editor { flex:1; width:100%; border:none; background:#050811; color:var(--primary-light); font-family:'Share Tech Mono',monospace; padding:22px; font-size:15px; line-height:1.7; resize:none; outline:none; }
+.sb-controls { padding:16px 20px; background:rgba(255,255,255,0.03); border-top:1px solid rgba(0, 153, 255, 0.16); display:flex; justify-content:flex-end; gap:16px; }
 .sb-btn {
-  padding:10px 20px; background:linear-gradient(135deg,#a855f7,#7c3aed);
-  color:#fff; border:none; border-radius:12px; font-weight:900; cursor:pointer;
-  display:flex; align-items:center; gap:8px; font-family:inherit; font-size:0.87rem;
-  box-shadow: 0 5px 0 rgba(0,0,0,0.35), 0 0 14px rgba(124,58,237,0.40);
-  transition:all 0.18s;
+  padding:12px 24px; background:linear-gradient(135deg,var(--primary-light),var(--primary));
+  color:#fff; border:none; border-radius:16px; font-weight:900; cursor:pointer;
+  display:flex; align-items:center; gap:10px; font-family:inherit; font-size:0.9rem;
+  box-shadow: var(--clay-sm);
+  transition:all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.sb-btn.success { background:linear-gradient(135deg,#34d399,#059669); box-shadow:0 5px 0 rgba(0,0,0,0.30), 0 0 14px rgba(52,211,153,0.40); }
-.sb-btn:hover  { transform:translateY(-2px); }
-.sb-btn:active { transform:translateY(2px); box-shadow:none; }
+.sb-btn.success { background:linear-gradient(135deg,#34d399,#059669); }
+.sb-btn:hover  { transform:scale(1.05); }
+.sb-btn:active { transform:scale(0.95); box-shadow: var(--clay-press); }
 .sb-btn:disabled { opacity:0.35; cursor:not-allowed; transform:none; box-shadow:none; }
 
 .sb-visualizer { flex:1; background:rgba(0,0,0,0.22); display:flex; align-items:center; justify-content:center; position:relative; }
-.sb-target { font-size:0.72rem; color:#4a3f6b; position:absolute; top:12px; right:14px; font-weight:700; }
-.sb-challenge-desc { padding:14px 18px; background:rgba(124,58,237,0.12); border-bottom:1px solid rgba(139,92,246,0.18); color:#c4b5fd; font-size:0.86rem; line-height:1.6; }
-.sb-loading { display:flex; align-items:center; justify-content:center; height:100vh; font-size:1.1rem; color:#a855f7; font-weight:700; }
+.sb-target { font-size:0.72rem; color:var(--text-muted); position:absolute; top:12px; right:14px; font-weight:700; }
+.sb-challenge-desc { padding:14px 18px; background:rgba(0, 153, 255, 0.12); border-bottom:1px solid rgba(0, 153, 255, 0.18); color:var(--primary-light); font-size:0.86rem; line-height:1.6; }
+.sb-loading { display:flex; align-items:center; justify-content:center; height:100vh; font-size:1.1rem; color:var(--primary); font-weight:700; }
