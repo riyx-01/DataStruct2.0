@@ -94,7 +94,7 @@ def trace_lines(frame, event, arg):
         
         local_vars = {
             k: v for k, v in frame.f_locals.items() 
-            if not k.startswith('__') and k not in ['sys', 'trace_state', 'ConsoleMock', 'serialize_val', 'trace_calls', 'trace_lines', 'user_code']
+            if not k.startswith('__') and k not in ['sys', 'trace_state', 'ConsoleMock', 'serialize_val', 'trace_calls', 'trace_lines', 'user_code', 'namespace']
         }
         
         for k, v in local_vars.items():
@@ -135,9 +135,10 @@ def trace_lines(frame, event, arg):
         trace_state.step_count += 1
     return trace_lines
 
+namespace = {}
 try:
     sys.settrace(trace_calls)
-    exec(user_code, {})
+    exec(user_code, namespace)
 except Exception as e:
     err_msg = f"Traceback Error: {str(e)}"
     trace_state.console_output.append(err_msg)
@@ -165,6 +166,35 @@ except Exception as e:
 finally:
     sys.settrace(None)
     sys.stdout = sys.__stdout__
+    
+    # Capture absolute final state mutations
+    final_vars = {}
+    final_memory = {"arrays": {}, "trees": {}, "graphs": {}, "stacks": {}, "objects": {}}
+    for k, v in namespace.items():
+        if k.startswith('__') or k in ['sys', 'trace_state', 'ConsoleMock', 'serialize_val', 'trace_calls', 'trace_lines', 'user_code', 'namespace'] or hasattr(v, '__call__') or isinstance(v, type):
+            continue
+        serialized = serialize_val(v)
+        if isinstance(serialized, list):
+            final_memory["arrays"][k] = serialized
+        elif isinstance(serialized, dict) and serialized.get("type") == "ref":
+            if any(x in serialized for x in ['left', 'right', 'next', 'prev']):
+                final_memory["trees"][k] = serialized
+            else:
+                final_memory["objects"][k] = serialized
+        else:
+            final_vars[k] = serialized
+            
+    code_lines = user_code.split('\\n')
+    trace_state.history.append({
+        "line": len(code_lines),
+        "code": "Execution completed",
+        "variables": final_vars,
+        "memoryStructures": final_memory,
+        "why": "Execution completed. Visualizing final program state.",
+        "deletedElements": [],
+        "output": [line for line in trace_state.console_output if line.strip()]
+    })
+    
     import json
     trace_history_json = json.dumps(trace_state.history)
 `;
@@ -1044,19 +1074,28 @@ const detectLanguage = (text) => {
 
 // ==================== LIQUID GLASS RENDERERS ====================
 
-const GlassArray = ({ name, arr }) => (
-  <div className="iso-glass-container">
-    <div className="iso-title">Array / Stack : <span>{name}</span></div>
-    <div className="iso-array">
-      {arr.map((val, idx) => (
-        <div key={idx} className="iso-array-cell">
-           <div className="iso-cell-value">{typeof val === 'object' ? '{...}' : String(val)}</div>
-           <div className="iso-cell-index">{idx}</div>
-        </div>
-      ))}
+const GlassArray = ({ name, arr, variables }) => {
+  const topVar = variables && (variables.top !== undefined ? Number(variables.top) : (variables.topIndex !== undefined ? Number(variables.topIndex) : null));
+  const isStack = name.toLowerCase().includes('stack') || topVar !== null;
+
+  return (
+    <div className="iso-glass-container">
+      <div className="iso-title">Array / Stack : <span>{name}</span></div>
+      <div className="iso-array">
+        {arr.map((val, idx) => {
+          const isInactive = isStack && topVar !== null && idx > topVar;
+          return (
+            <div key={idx} className={`iso-array-cell ${isInactive ? 'inactive-stack-cell' : ''}`}>
+               <div className="iso-cell-value">{typeof val === 'object' ? '{...}' : String(val)}</div>
+               <div className="iso-cell-index">{idx}</div>
+               {topVar === idx && <div className="stack-top-pointer">top</div>}
+            </div>
+          );
+        })}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const GlassList = ({ name, head }) => {
   const nodes = [];
@@ -1530,7 +1569,7 @@ const CodeVisualizer = () => {
                            {currentState && (
                              <>
                                {Object.entries(currentState.memoryStructures.arrays).map(([name, arr]) => (
-                                 <GlassArray key={name} name={name} arr={arr} />
+                                 <GlassArray key={name} name={name} arr={arr} variables={currentState.variables} />
                                ))}
                                {Object.entries(currentState.memoryStructures.trees)
                                  .filter(([name, node]) => node && !node.isReference)
@@ -1571,7 +1610,7 @@ const CodeVisualizer = () => {
                             </div>
                             <div className="vault-preview">
                                {item.type === 'Array' ? (
-                                 <GlassArray name={item.name} arr={item.data} />
+                                 <GlassArray name={item.name} arr={item.data} variables={currentState.variables} />
                                ) : item.data.hasOwnProperty('next') ? (
                                  <GlassList name={item.name} head={item.data} />
                                ) : (
