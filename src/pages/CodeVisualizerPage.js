@@ -9,6 +9,142 @@ import {
 
 import './CodeVisualizerPage.css';
 
+// ==================== PYTHON TRACE SCRIPT ====================
+const PYTHON_TRACE_SCRIPT = `
+import sys
+
+class TraceState:
+    def __init__(self):
+        self.history = []
+        self.console_output = []
+        self.step_count = 0
+        self.max_steps = 1000
+
+trace_state = TraceState()
+
+class ConsoleMock:
+    def write(self, text):
+        if text:
+            if not trace_state.console_output:
+                trace_state.console_output.append("")
+            if text == '\\n':
+                trace_state.console_output.append("")
+            else:
+                trace_state.console_output[-1] += text
+    def flush(self):
+        pass
+
+sys.stdout = ConsoleMock()
+
+def serialize_val(val, visited=None):
+    if visited is None:
+        visited = set()
+    if val is None:
+        return None
+    if isinstance(val, (int, float, str, bool)):
+        return val
+    
+    val_id = id(val)
+    if val_id in visited:
+        return {"isReference": True, "targetId": hex(val_id)}
+    
+    visited.add(val_id)
+    
+    if isinstance(val, list):
+        return [serialize_val(item, visited) for item in val]
+    if isinstance(val, dict):
+        return {str(k): serialize_val(v, visited) for k, v in val.items()}
+        
+    if hasattr(val, '__dict__'):
+        fields = {}
+        for k, v in val.__dict__.items():
+            if not k.startswith('_'):
+                fields[k] = serialize_val(v, visited)
+        
+        res = {
+            "id": hex(val_id),
+            "type": "ref",
+            "class": val.__class__.__name__,
+            "val": getattr(val, 'val', getattr(val, 'value', getattr(val, 'data', None)))
+        }
+        for link in ['left', 'right', 'next', 'prev']:
+            if hasattr(val, link):
+                res[link] = serialize_val(getattr(val, link), visited)
+        
+        for k, v in fields.items():
+            if k not in ['left', 'right', 'next', 'prev', 'val', 'value', 'data']:
+                res[k] = v
+        return res
+        
+    return str(val)
+
+def trace_calls(frame, event, arg):
+    if event != 'call':
+        return
+    return trace_lines
+
+def trace_lines(frame, event, arg):
+    if event == 'line':
+        if trace_state.step_count > trace_state.max_steps:
+            raise Exception("Infinite loop protection triggered.")
+        
+        line_no = frame.f_lineno
+        variables = {}
+        memory_structures = {"arrays": {}, "trees": {}, "graphs": {}, "stacks": {}, "objects": {}}
+        
+        local_vars = {
+            k: v for k, v in frame.f_locals.items() 
+            if not k.startswith('__') and k not in ['sys', 'trace_state', 'ConsoleMock', 'serialize_val', 'trace_calls', 'trace_lines', 'user_code']
+        }
+        
+        for k, v in local_vars.items():
+            if hasattr(v, '__call__') or isinstance(v, type):
+                continue
+            
+            serialized = serialize_val(v)
+            if isinstance(serialized, list):
+                memory_structures["arrays"][k] = serialized
+            elif isinstance(serialized, dict) and serialized.get("type") == "ref":
+                if any(x in serialized for x in ['left', 'right', 'next', 'prev']):
+                    memory_structures["trees"][k] = serialized
+                else:
+                    memory_structures["objects"][k] = serialized
+            else:
+                variables[k] = serialized
+                
+        code_lines = user_code.split('\\n')
+        code_line = code_lines[line_no - 1].strip() if 0 < line_no <= len(code_lines) else ""
+        
+        why = "Executing instruction."
+        if "push" in code_line or "append" in code_line:
+            why = "Stack / List Push: Appending element to internal collection."
+        elif "pop" in code_line:
+            why = "Stack / List Pop: Removing and returning elements."
+        elif "peek" in code_line or "[-1]" in code_line:
+            why = "Stack Peek: Accessing top of stack."
+            
+        trace_state.history.append({
+            "line": line_no,
+            "code": code_line,
+            "variables": variables,
+            "memoryStructures": memory_structures,
+            "why": why,
+            "deletedElements": [],
+            "output": [line for line in trace_state.console_output if line.strip()]
+        })
+        trace_state.step_count += 1
+    return trace_lines
+
+try:
+    sys.settrace(trace_calls)
+    exec(user_code, {})
+except Exception as e:
+    trace_state.console_output.append(f"Traceback Error: {str(e)}")
+finally:
+    sys.settrace(None)
+    sys.stdout = sys.__stdout__
+`;
+
 // ==================== CODE TEMPLATES ====================
 const CODE_TEMPLATES = {
   bst_insert: {
@@ -48,6 +184,33 @@ console.log("Deleting node 20...");
 // Unlink node 20
 head.next = head.next.next;
 console.log("Node 20 deleted successfully.");`
+  },
+  python_stack: {
+    name: "Python Stack Class",
+    language: "python",
+    code: `class Stack:
+    def __init__(self):
+        self.items = []
+
+    def push(self, item):
+        self.items.append(item)
+
+    def pop(self):
+        if self.items:
+            return self.items.pop()
+        return None
+
+    def peek(self):
+        if self.items:
+            return self.items[-1]
+        return None
+
+s = Stack()
+s.push(10)
+s.push(20)
+
+print(s.pop())
+print(s.peek())`
   },
   cpp_stack: {
     name: "C++ Stack Push/Pop",
@@ -147,7 +310,7 @@ const simulateExecution = (rawCode, language) => {
 
   const captureState = (lineNum, codeLine, why) => {
     const variablesCopy = {};
-    const memoryStructures = { arrays: {}, trees: {}, graphs: {}, stacks: {} };
+    const memoryStructures = { arrays: {}, trees: {}, graphs: {}, stacks: {}, objects: {} };
     const cloneMap = new Map();
     
     const cloneStructure = (id) => {
@@ -320,7 +483,6 @@ const simulateExecution = (rawCode, language) => {
       });
       
       if (lineOutput) {
-        // Handle newline strings inside variables / C++ output buffer
         if (lineOutput.includes('\\n')) {
           const subparts = lineOutput.split('\\n');
           subparts.forEach((sp, sidx) => {
@@ -376,7 +538,7 @@ const simulateExecution = (rawCode, language) => {
       // Pointer update: parent.left = target
       const fieldMatch = lhs.match(/^([\w*&]+)\.(\w+)$/);
       if (fieldMatch) {
-        why = "Pointer Update: Modifying the link between nodes. This changes the structural topology.";
+        why = "Pointer Update: Modifying the link between nodes. This changes the structural topology of the tree.";
         let parentName = fieldMatch[1].replace(/^[*&]+/, '');
         const pointerName = fieldMatch[2];
         const parentRef = variables[parentName];
@@ -462,7 +624,6 @@ const simulateExecution = (rawCode, language) => {
       
       const startVal = Number(resolveExpression(startExpr));
       
-      // Determine loop body:
       let bodyLines = [];
       let nextIdx = lineIdx + 1;
       if (lines[nextIdx] && lines[nextIdx].trim() === '{') {
@@ -471,25 +632,23 @@ const simulateExecution = (rawCode, language) => {
           bodyLines.push(lines[nextIdx]);
           nextIdx++;
         }
-        lineIdx = nextIdx + 1; // Skip past matching '}'
+        lineIdx = nextIdx + 1;
       } else {
         if (lines[nextIdx]) {
           bodyLines.push(lines[nextIdx]);
         }
-        lineIdx = nextIdx + 1; // Skip past the loop body line
+        lineIdx = nextIdx + 1;
       }
       
-      // Execute unrolled loop iterations
       variables[varName] = startVal;
       let limitVal = Number(resolveExpression(endExpr));
       const isWithinLimit = op === '<=' ? (v => v <= limitVal) : (v => v < limitVal);
       
       while (isWithinLimit(variables[varName])) {
         bodyLines.forEach(bodyLine => {
-          executeSingleLine(bodyLine, lineIdx); // use loop line index
+          executeSingleLine(bodyLine, lineIdx);
         });
         variables[varName] = variables[varName] + 1;
-        // Refresh limit value in case it is mutated dynamically (like top)
         limitVal = Number(resolveExpression(endExpr));
       }
       continue;
@@ -603,7 +762,7 @@ const compileAndRun = (rawCode, language) => {
       const __trace = (line, scope) => {
         if (stepCount++ > 3000) throw new Error("Infinite loop detected.");
         const variables = {};
-        const memoryStructures = { arrays: {}, trees: {}, graphs: {}, stacks: {} };
+        const memoryStructures = { arrays: {}, trees: {}, graphs: {}, stacks: {}, objects: {} };
 
         const visited = new Map();
         let objectIdCounter = 1;
@@ -657,7 +816,7 @@ const compileAndRun = (rawCode, language) => {
              if ('left' in val || 'right' in val || 'next' in val || 'prev' in val || 'val' in val || 'value' in val) {
                memoryStructures.trees[key] = cloneStructure(val);
              } else {
-               variables[key] = __clone(val);
+               memoryStructures.objects[key] = cloneStructure(val) || __clone(val);
              }
           } else {
             variables[key] = val;
@@ -678,15 +837,15 @@ const compileAndRun = (rawCode, language) => {
         const codeLine = rawCode.split('\n')[line - 1]?.trim() || '';
         let why = "Executing logical instruction.";
         
-        if (codeLine.includes('root =') || codeLine.includes('Node(')) why = "Memory Allocation: Creating a new object in the heap. This allocates space for value and child pointers.";
-        else if (codeLine.includes('return')) why = "Returning Control: Exiting current frame and passing value back to the caller.";
-        else if (codeLine.includes('.left') || codeLine.includes('.right')) why = "Pointer Update: Modifying the link between nodes. This changes the structural topology of the tree.";
-        else if (codeLine.includes('.next')) why = "Linked Connection: Updating the directional edge in the list structure.";
-        else if (codeLine.includes('arr.push') || codeLine.includes('.push')) why = "Heap Push: Growing a dynamic array. This may trigger an O(N) resize if capacity is reached.";
-        else if (codeLine.includes('for') || codeLine.includes('while')) why = "Iterative Branch: Evaluating the loop guard to decide if another iteration is required.";
-        else if (codeLine.includes('if')) why = "Logical Fork: Evaluating a boolean predicate to fork execution path.";
-        else if (codeLine.includes('=')) why = "State Mutation: Binding a new value to a variable descriptor in the current stack frame.";
-        else if (codeLine.includes('console.log')) why = "Standard Output: Broadcasting internal state to the virtual console.";
+        if (codeLine.includes('root =') || codeLine.includes('Node(')) why = "Memory Allocation: Creating a new object in the heap.";
+        else if (codeLine.includes('return')) why = "Returning Control: Exiting current frame.";
+        else if (codeLine.includes('.left') || codeLine.includes('.right')) why = "Pointer Update: Modifying the link between nodes.";
+        else if (codeLine.includes('.next')) why = "Linked Connection: Updating the directional edge.";
+        else if (codeLine.includes('arr.push') || codeLine.includes('.push')) why = "Heap Push: Growing a dynamic array.";
+        else if (codeLine.includes('for') || codeLine.includes('while')) why = "Iterative Branch: Evaluating loop condition.";
+        else if (codeLine.includes('if')) why = "Logical Fork: Evaluating boolean predicate.";
+        else if (codeLine.includes('=')) why = "State Mutation: Binding a new value to a variable descriptor.";
+        else if (codeLine.includes('console.log')) why = "Standard Output: Broadcasting internal state to the console.";
 
         history.push({
           line,
@@ -732,7 +891,6 @@ const preprocessImage = (imageFile) => {
       
       ctx.drawImage(img, 0, 0);
       
-      // Grayscale + High contrast enhancement (superior to flat binarization)
       const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = imgData.data;
       const contrastFactor = (259 * (140 + 255)) / (255 * (259 - 140));
@@ -742,7 +900,6 @@ const preprocessImage = (imageFile) => {
         const b = data[i + 2];
         const gray = 0.299 * r + 0.587 * g + 0.114 * b;
         
-        // High contrast adjustment
         const enhanced = contrastFactor * (gray - 128) + 128;
         const clamped = Math.max(0, Math.min(255, enhanced));
         
@@ -908,6 +1065,25 @@ const GlassTree = ({ name, node }) => {
   );
 };
 
+const GlassObject = ({ name, obj }) => (
+  <div className="iso-glass-container">
+    <div className="iso-title">Object / Instance : <span>{name} ({obj.class || 'Object'})</span></div>
+    <div className="iso-object-body" style={{ display: 'flex', flexDirection: 'column', gap: '8px', padding: '10px 0' }}>
+      {Object.entries(obj).map(([key, val]) => {
+        if (['id', 'type', 'class', 'val', 'variables'].includes(key)) return null;
+        return (
+          <div key={key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.03)', padding: '6px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <span style={{ color: 'var(--primary-light)', fontWeight: 'bold', fontSize: '12px' }}>{key}</span>
+            <span style={{ color: 'var(--text-main)', fontSize: '13px', fontFamily: 'monospace' }}>
+              {Array.isArray(val) ? `[ ${val.join(', ')} ]` : typeof val === 'object' ? JSON.stringify(val) : String(val)}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  </div>
+);
+
 // ==================== MAIN COMPONENT ====================
 
 const CodeVisualizer = () => {
@@ -924,11 +1100,30 @@ const CodeVisualizer = () => {
   const [isScanning, setIsScanning] = useState(false);
   const [showExplanation, setShowExplanation] = useState(false);
   
+  const [pyodide, setPyodide] = useState(null);
+
   const timerRef = useRef(null);
   const fileInputRef = useRef(null);
   const editorRef = useRef(null);
   const monacoRef = useRef(null);
   const decorationsRef = useRef([]);
+
+  // Initialize Pyodide on Mount
+  useEffect(() => {
+    const initPyodide = async () => {
+      if (window.loadPyodide) {
+        try {
+          const py = await window.loadPyodide({
+            indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/"
+          });
+          setPyodide(py);
+        } catch(e) {
+          console.error("Pyodide failed to load:", e);
+        }
+      }
+    };
+    initPyodide();
+  }, []);
 
   const handleEditorDidMount = (editor, monaco) => {
     editorRef.current = editor;
@@ -1004,14 +1199,30 @@ const CodeVisualizer = () => {
     }
   }, [currentState]);
 
-  const performCompilation = useCallback(() => {
+  const performCompilation = useCallback(async () => {
     try {
-      const steps = compileAndRun(code, language);
+      let steps = [];
+      if (language === 'python') {
+        if (!pyodide) {
+          setError("Python environment initializing. Please wait...");
+          return [];
+        }
+        setError(null);
+        pyodide.globals.set('user_code', code);
+        await pyodide.runPythonAsync(PYTHON_TRACE_SCRIPT);
+        steps = pyodide.globals.get('trace_state').history.toJs();
+      } else {
+        steps = compileAndRun(code, language);
+      }
       setTokens(steps);
       setError(null);
       return steps;
-    } catch(e) { setError(e.message); setTokens([]); return []; }
-  }, [code, language]);
+    } catch(e) { 
+      setError(e.message); 
+      setTokens([]); 
+      return []; 
+    }
+  }, [code, language, pyodide]);
 
   const reset = useCallback(() => { 
     setCurrentStep(0); 
@@ -1021,7 +1232,11 @@ const CodeVisualizer = () => {
   }, []);
 
   useEffect(() => {
-    const timeout = setTimeout(() => { performCompilation(); reset(); }, 800);
+    const run = async () => {
+      await performCompilation();
+      reset();
+    };
+    const timeout = setTimeout(run, 800);
     return () => clearTimeout(timeout);
   }, [code, language, performCompilation, reset]);
 
@@ -1037,7 +1252,6 @@ const CodeVisualizer = () => {
     }
   }, [isPlaying, speed, tokens.length]);
 
-  // Update editor value directly via reference to avoid syncing/rendering lag
   const updateCodeAndEditor = (newCode, lang) => {
     setCode(newCode);
     if (lang) setLanguage(lang);
@@ -1059,7 +1273,6 @@ const CodeVisualizer = () => {
       }
       const { data } = await worker.recognize(processedCanvas, 'eng');
       
-      // Clean scanned text of curly quotes and spacing glitches
       const scannedText = data.text
         .replace(/[\u2018\u2019\u201A\u201B\u00B4\u02CB`]/g, "'")
         .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
@@ -1135,7 +1348,6 @@ const CodeVisualizer = () => {
                  />
               </div>
               
-              {/* Presets and Quick Templates Panel */}
               <div style={{ display: 'flex', gap: '10px', marginTop: '12px', flexWrap: 'wrap' }}>
                 <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', marginRight: '5px' }}>Presets:</span>
                 {Object.entries(CODE_TEMPLATES).map(([key, t]) => (
@@ -1216,13 +1428,17 @@ const CodeVisualizer = () => {
                                       return <GlassTree key={name} name={name} node={node} />;
                                     }
                                  })}
+                               {Object.entries(currentState.memoryStructures.objects || {}).map(([name, obj]) => (
+                                 <GlassObject key={name} name={name} obj={obj} />
+                               ))}
                              </>
                            )}
                            {(!currentState || 
                              (Object.keys(currentState.memoryStructures.arrays).length === 0 && 
-                              Object.keys(currentState.memoryStructures.trees).length === 0)) && (
+                              Object.keys(currentState.memoryStructures.trees).length === 0 &&
+                              Object.keys(currentState.memoryStructures.objects || {}).length === 0)) && (
                              <div className="heap-placeholder" style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '60px', fontStyle: 'italic', fontSize: '14px' }}>
-                               Heap is currently empty. Allocate nodes (e.g. root = new Node(10)) or arrays to visualize the topology.
+                               Heap is currently empty. Allocate nodes or objects to visualize.
                              </div>
                            )}
                         </div>
