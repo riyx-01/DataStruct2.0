@@ -49,6 +49,33 @@ console.log("Deleting node 20...");
 head.next = head.next.next;
 console.log("Node 20 deleted successfully.");`
   },
+  cpp_stack: {
+    name: "C++ Stack Push/Pop",
+    language: "cpp",
+    code: `#include <iostream>
+using namespace std;
+
+int main() {
+    int stack[5];
+    int top = -1;
+
+    stack[++top] = 18;
+    stack[++top] = 28;
+    stack[++top] = 38;
+
+    cout << "Stack elements: ";
+
+    for(int i = 0; i <= top; i++)
+        cout << stack[i] << " ";
+
+    top--;
+
+    cout << "\\nAfter pop: ";
+
+    for(int i = 0; i <= top; i++)
+        cout << stack[i] << " ";
+}`
+  },
   array_ops: {
     name: "Stack / Array Operations",
     language: "javascript",
@@ -94,7 +121,7 @@ const convertHashComments = (text) => {
   return processedLines.join('\n');
 };
 
-// Intelligent Virtual Simulator for Javascript / Python / C++ / Java
+// Intelligent Virtual Instruction Interpreter for JS / Python / Java / C++
 const simulateExecution = (rawCode, language) => {
   const uniformCode = convertHashComments(rawCode);
   const lines = uniformCode.split('\n');
@@ -136,7 +163,6 @@ const simulateExecution = (rawCode, language) => {
       };
       cloneMap.set(id, clone);
       
-      // Determine links based on existing fields
       if (node.left !== undefined) clone.left = cloneStructure(node.left);
       if (node.right !== undefined) clone.right = cloneStructure(node.right);
       if (node.next !== undefined) clone.next = cloneStructure(node.next);
@@ -187,8 +213,234 @@ const simulateExecution = (rawCode, language) => {
     };
   };
 
-  lines.forEach((rawLine, idx) => {
-    const lineNum = idx + 1;
+  // Expression Resolver with side-effects (prefix/postfix increments, index lookups)
+  const resolveExpression = (expr) => {
+    const clean = expr.trim();
+    if (clean === 'null' || clean === 'None' || clean === 'nullptr' || clean === 'undefined') {
+      return null;
+    }
+    if ((clean.startsWith('"') && clean.endsWith('"')) || (clean.startsWith("'") && clean.endsWith("'"))) {
+      return clean.slice(1, -1);
+    }
+    if (!isNaN(clean) && clean !== '') {
+      return Number(clean);
+    }
+    
+    // Prefix / Postfix increments
+    if (clean.startsWith('++')) {
+      const varName = clean.substring(2).trim();
+      if (variables[varName] !== undefined) {
+        variables[varName] = Number(variables[varName]) + 1;
+        return variables[varName];
+      }
+    }
+    if (clean.startsWith('--')) {
+      const varName = clean.substring(2).trim();
+      if (variables[varName] !== undefined) {
+        variables[varName] = Number(variables[varName]) - 1;
+        return variables[varName];
+      }
+    }
+    if (clean.endsWith('++')) {
+      const varName = clean.substring(0, clean.length - 2).trim();
+      if (variables[varName] !== undefined) {
+        const oldVal = variables[varName];
+        variables[varName] = Number(variables[varName]) + 1;
+        return oldVal;
+      }
+    }
+    if (clean.endsWith('--')) {
+      const varName = clean.substring(0, clean.length - 2).trim();
+      if (variables[varName] !== undefined) {
+        const oldVal = variables[varName];
+        variables[varName] = Number(variables[varName]) - 1;
+        return oldVal;
+      }
+    }
+    
+    // Array index lookup: stack[top], stack[++top]
+    const arrayIndexMatch = clean.match(/^(\w+)\s*\[([^\]]*)\]$/);
+    if (arrayIndexMatch) {
+      const arrayName = arrayIndexMatch[1];
+      const indexExpr = arrayIndexMatch[2].trim();
+      const resolvedIndex = resolveExpression(indexExpr);
+      if (Array.isArray(variables[arrayName])) {
+        return variables[arrayName][resolvedIndex];
+      }
+    }
+    
+    // Node property lookup: node.val
+    const fieldMatch = clean.match(/^(\w+)\.(\w+)$/);
+    if (fieldMatch) {
+      const varName = fieldMatch[1];
+      const fieldName = fieldMatch[2];
+      const ref = variables[varName];
+      if (ref && ref.type === 'ref' && heap[ref.id]) {
+        return heap[ref.id][fieldName];
+      }
+    }
+    
+    if (variables[clean] !== undefined) {
+      return variables[clean];
+    }
+    
+    return undefined;
+  };
+
+  const executeSingleLine = (rawLine, lineNum) => {
+    let line = rawLine.trim();
+    if (line.includes('//')) {
+      line = line.split('//')[0].trim();
+    }
+    if (!line || line.startsWith('/*') || line.startsWith('*')) {
+      return;
+    }
+    
+    let why = "Executing logical instruction.";
+    
+    // 1. C++ style cout (cout << ...)
+    if (line.includes('cout') && line.includes('<<')) {
+      why = "Standard Output: Broadcasting internal state to the virtual C++ console.";
+      const parts = line.split('<<').slice(1).map(p => p.trim());
+      let lineOutput = "";
+      
+      parts.forEach(part => {
+        let cleanPart = part;
+        if (cleanPart.endsWith(';')) cleanPart = cleanPart.slice(0, -1).trim();
+        
+        if ((cleanPart.startsWith('"') && cleanPart.endsWith('"')) || (cleanPart.startsWith("'") && cleanPart.endsWith("'"))) {
+          lineOutput += cleanPart.slice(1, -1);
+        } else if (cleanPart === 'endl' || cleanPart === '"\\n"') {
+          currentOutput.push(lineOutput);
+          lineOutput = "";
+        } else {
+          const val = resolveExpression(cleanPart);
+          lineOutput += val !== undefined ? String(val) : cleanPart;
+        }
+      });
+      
+      if (lineOutput) {
+        // Handle newline strings inside variables / C++ output buffer
+        if (lineOutput.includes('\\n')) {
+          const subparts = lineOutput.split('\\n');
+          subparts.forEach((sp, sidx) => {
+            if (sidx === 0) {
+              if (currentOutput.length === 0) currentOutput.push(sp);
+              else currentOutput[currentOutput.length - 1] += sp;
+            } else {
+              currentOutput.push(sp);
+            }
+          });
+        } else {
+          if (currentOutput.length === 0) {
+            currentOutput.push(lineOutput);
+          } else {
+            currentOutput[currentOutput.length - 1] += lineOutput;
+          }
+        }
+      }
+    }
+    // 2. JS console.log or Python print
+    else if (line.includes('print(') || line.includes('console.log')) {
+      why = "Standard Output: Broadcasting internal state to the virtual console.";
+      const printMatch = line.match(/(?:print|console\.log)\(([^)]*)\)/);
+      if (printMatch) {
+        const argsStr = printMatch[1];
+        const args = argsStr.split(',').map(a => a.trim());
+        const resolvedArgs = args.map(arg => {
+          const val = resolveExpression(arg);
+          return val !== undefined ? String(val) : arg;
+        });
+        currentOutput.push(resolvedArgs.join(' '));
+      }
+    }
+    // 3. Array Instantiation: int stack[5];
+    else if (line.match(/^(\w+)\s+(\w+)\s*\[\s*\d*\s*\]\s*;?$/)) {
+      why = "Memory Allocation: Initializing array structure in stack/heap.";
+      const match = line.match(/^(\w+)\s+(\w+)\s*\[\s*\d*\s*\]\s*;?$/);
+      const name = match[2];
+      variables[name] = [];
+    }
+    // 4. Standalone increment / decrement statement: top--; or ++top;
+    else if (line.match(/^(\+\+|--)?\s*(\w+)\s*(\+\+|--)?\s*;?$/)) {
+      why = "State Mutation: Modifying variable value.";
+      resolveExpression(line);
+    }
+    // 5. Variable Assignments with =
+    else if (line.includes('=')) {
+      const eqIdx = line.indexOf('=');
+      const lhs = line.substring(0, eqIdx).trim();
+      let rhs = line.substring(eqIdx + 1).trim();
+      if (rhs.endsWith(';')) rhs = rhs.slice(0, -1).trim();
+      
+      // Pointer update: parent.left = target
+      const fieldMatch = lhs.match(/^([\w*&]+)\.(\w+)$/);
+      if (fieldMatch) {
+        why = "Pointer Update: Modifying the link between nodes. This changes the structural topology.";
+        let parentName = fieldMatch[1].replace(/^[*&]+/, '');
+        const pointerName = fieldMatch[2];
+        const parentRef = variables[parentName];
+        
+        if (parentRef && parentRef.type === 'ref' && heap[parentRef.id]) {
+          const nodeAllocMatch = rhs.match(/^(?:new\s+)?Node\(([^)]*)\)$/);
+          if (nodeAllocMatch) {
+            const valStr = nodeAllocMatch[1].trim();
+            const val = isNaN(valStr) ? valStr.replace(/['"]/g, '') : Number(valStr);
+            const childId = createNode(val);
+            heap[parentRef.id][pointerName] = childId;
+          } else {
+            const resolvedRhs = resolveExpression(rhs);
+            if (resolvedRhs && typeof resolvedRhs === 'object' && resolvedRhs.type === 'ref') {
+              heap[parentRef.id][pointerName] = resolvedRhs.id;
+            } else {
+              heap[parentRef.id][pointerName] = null;
+            }
+          }
+        }
+      }
+      // Array index assignment: stack[++top] = 18
+      else {
+        const arrayIndexMatch = lhs.match(/^([\w*&]+)\s*\[([^\]]*)\]$/);
+        if (arrayIndexMatch) {
+          why = "Heap Write: Updating value at specific index in dynamic array.";
+          const arrayName = arrayIndexMatch[1].replace(/^[*&]+/, '');
+          const indexExpr = arrayIndexMatch[2].trim();
+          const resolvedIndex = resolveExpression(indexExpr);
+          const resolvedVal = resolveExpression(rhs);
+          
+          if (!variables[arrayName]) {
+            variables[arrayName] = [];
+          }
+          variables[arrayName][resolvedIndex] = resolvedVal;
+        }
+        // General assignment (e.g. int top = -1)
+        else {
+          why = "State Mutation: Binding a new value to a variable descriptor.";
+          const varMatch = lhs.match(/([\w*&]+)$/);
+          if (varMatch) {
+            const varName = varMatch[1].replace(/^[*&]+/, '');
+            
+            const nodeAllocMatch = rhs.match(/^(?:new\s+)?Node\(([^)]*)\)$/);
+            if (nodeAllocMatch) {
+              const valStr = nodeAllocMatch[1].trim();
+              const val = isNaN(valStr) ? valStr.replace(/['"]/g, '') : Number(valStr);
+              const id = createNode(val);
+              variables[varName] = { type: 'ref', id };
+            } else {
+              variables[varName] = resolveExpression(rhs);
+            }
+          }
+        }
+      }
+    }
+    
+    history.push(captureState(lineNum, rawLine.trim(), why));
+  };
+
+  // Run the loop interpreter
+  let lineIdx = 0;
+  while (lineIdx < lines.length) {
+    const rawLine = lines[lineIdx];
     let line = rawLine.trim();
     
     if (line.includes('//')) {
@@ -196,166 +448,56 @@ const simulateExecution = (rawCode, language) => {
     }
     
     if (!line || line.startsWith('/*') || line.startsWith('*')) {
-      return;
+      lineIdx++;
+      continue;
     }
     
-    let why = "Executing logical instruction.";
-    
-    // 1. Console outputs
-    if (line.includes('print(') || line.includes('console.log')) {
-      why = "Standard Output: Broadcasting internal state to the virtual console.";
-      const printMatch = line.match(/(?:print|console\.log)\(([^)]*)\)/);
-      if (printMatch) {
-        const argsStr = printMatch[1];
-        const args = argsStr.split(',').map(a => a.trim());
-        const resolvedArgs = args.map(arg => {
-          if ((arg.startsWith('"') && arg.endsWith('"')) || (arg.startsWith("'") && arg.endsWith("'"))) {
-            return arg.slice(1, -1);
-          }
-          if (variables[arg] !== undefined) {
-            const val = variables[arg];
-            if (val && typeof val === 'object' && val.type === 'ref') {
-              return `[Node ${val.id.substring(2)} (val=${heap[val.id]?.val})]`;
-            }
-            return String(val);
-          }
-          const propMatch = arg.match(/^(\w+)\.(\w+)$/);
-          if (propMatch) {
-            const varName = propMatch[1];
-            const propName = propMatch[2];
-            const ref = variables[varName];
-            if (ref && ref.type === 'ref' && heap[ref.id]) {
-              return String(heap[ref.id][propName]);
-            }
-          }
-          return arg;
-        });
-        currentOutput.push(resolvedArgs.join(' '));
-      }
-    }
-    // 2. Node allocations: let x = new Node(val)
-    else if (line.match(/(?:let|const|var)?\s*(\w+)\s*=\s*(?:new\s+)?Node\(([^)]*)\)/)) {
-      why = "Memory Allocation: Creating a new object in the heap. This allocates space for value and child pointers.";
-      const match = line.match(/(?:let|const|var)?\s*(\w+)\s*=\s*(?:new\s+)?Node\(([^)]*)\)/);
-      const name = match[1];
-      const valStr = match[2].trim();
-      const val = isNaN(valStr) ? valStr.replace(/['"]/g, '') : Number(valStr);
-      const id = createNode(val);
-      variables[name] = { type: 'ref', id };
-    }
-    // 3. Pointer linkages: root.left = new Node(val)
-    else if (line.match(/(\w+)\.(left|right|next|prev)\s*=\s*(?:new\s+)?Node\(([^)]*)\)/)) {
-      why = "Memory Allocation & Link: Allocating a new Node and establishing a pointer reference.";
-      const match = line.match(/(\w+)\.(left|right|next|prev)\s*=\s*(?:new\s+)?Node\(([^)]*)\)/);
-      const parentName = match[1];
-      const pointerName = match[2];
-      const valStr = match[3].trim();
-      const val = isNaN(valStr) ? valStr.replace(/['"]/g, '') : Number(valStr);
-      const parentRef = variables[parentName];
-      if (parentRef && parentRef.type === 'ref' && heap[parentRef.id]) {
-        const childId = createNode(val);
-        heap[parentRef.id][pointerName] = childId;
-      }
-    }
-    // 4. Pointer updates / Deletions: root.left = temp, root.left = null
-    else if (line.match(/(\w+)\.(left|right|next|prev)\s*=\s*(.*)/)) {
-      why = "Pointer Update: Modifying the link between nodes. This changes the structural topology.";
-      const match = line.match(/(\w+)\.(left|right|next|prev)\s*=\s*(.*)/);
-      const parentName = match[1];
-      const pointerName = match[2];
-      let targetName = match[3].trim();
-      if (targetName.endsWith(';')) targetName = targetName.slice(0, -1).trim();
+    // Check if it's a simple for loop: for(int i = 0; i <= top; i++)
+    const forLoopMatch = line.match(/for\s*\(\s*(?:int|let|var)?\s*(\w+)\s*=\s*([^;]+)\s*;\s*\1\s*(<=|<)\s*([^;]+)\s*;\s*\1\s*(?:\+\+|--)\s*\)/);
+    if (forLoopMatch) {
+      const varName = forLoopMatch[1];
+      const startExpr = forLoopMatch[2];
+      const op = forLoopMatch[3];
+      const endExpr = forLoopMatch[4];
       
-      const parentRef = variables[parentName];
-      if (parentRef && parentRef.type === 'ref' && heap[parentRef.id]) {
-        if (targetName === 'null' || targetName === 'None' || targetName === 'nullptr' || targetName === 'undefined') {
-          heap[parentRef.id][pointerName] = null;
-        } else {
-          const targetRef = variables[targetName];
-          if (targetRef && targetRef.type === 'ref') {
-            heap[parentRef.id][pointerName] = targetRef.id;
-          }
+      const startVal = Number(resolveExpression(startExpr));
+      
+      // Determine loop body:
+      let bodyLines = [];
+      let nextIdx = lineIdx + 1;
+      if (lines[nextIdx] && lines[nextIdx].trim() === '{') {
+        nextIdx++;
+        while (nextIdx < lines.length && lines[nextIdx].trim() !== '}') {
+          bodyLines.push(lines[nextIdx]);
+          nextIdx++;
         }
+        lineIdx = nextIdx + 1; // Skip past matching '}'
+      } else {
+        if (lines[nextIdx]) {
+          bodyLines.push(lines[nextIdx]);
+        }
+        lineIdx = nextIdx + 1; // Skip past the loop body line
       }
-    }
-    // 5. Array Push
-    else if (line.includes('.push') || line.includes('.append')) {
-      why = "Heap Push: Growing a dynamic array structure in memory.";
-      const match = line.match(/(\w+)\.\s*(?:append|push)\(([^)]*)\)/);
-      if (match) {
-        const name = match[1];
-        const valStr = match[2].trim();
-        let val = isNaN(valStr) ? valStr.replace(/['"]/g, '') : Number(valStr);
-        if (variables[valStr] !== undefined) {
-          val = variables[valStr];
-        }
-        if (!variables[name]) variables[name] = [];
-        variables[name].push(val);
+      
+      // Execute unrolled loop iterations
+      variables[varName] = startVal;
+      let limitVal = Number(resolveExpression(endExpr));
+      const isWithinLimit = op === '<=' ? (v => v <= limitVal) : (v => v < limitVal);
+      
+      while (isWithinLimit(variables[varName])) {
+        bodyLines.forEach(bodyLine => {
+          executeSingleLine(bodyLine, lineIdx); // use loop line index
+        });
+        variables[varName] = variables[varName] + 1;
+        // Refresh limit value in case it is mutated dynamically (like top)
+        limitVal = Number(resolveExpression(endExpr));
       }
-    }
-    // 6. Array Pop
-    else if (line.includes('.pop')) {
-      why = "Heap Pop: Dequeuing or removing an element from the dynamic structure.";
-      const match = line.match(/(\w+)\.\s*pop\(([^)]*)\)/);
-      if (match) {
-        const name = match[1];
-        const arg = match[2].trim();
-        if (Array.isArray(variables[name])) {
-          if (arg === '0') {
-            variables[name].shift();
-          } else {
-            variables[name].pop();
-          }
-        }
-      }
-    }
-    // 7. General Assignment & Traversals
-    else if (line.includes('=')) {
-      why = "State Mutation: Binding a new value to a variable descriptor.";
-      const match = line.match(/(?:let|const|var)?\s*(\w+)\s*=\s*(.*)/);
-      if (match) {
-        const name = match[1];
-        let valStr = match[2].trim();
-        if (valStr.endsWith(';')) valStr = valStr.slice(0, -1).trim();
-        
-        if (valStr === '[]') {
-          variables[name] = [];
-        } else if (valStr.startsWith('[') && valStr.endsWith(']')) {
-          try {
-            const validJsonStr = valStr.replace(/'/g, '"');
-            variables[name] = JSON.parse(validJsonStr);
-          } catch {
-            variables[name] = [];
-          }
-        } 
-        // Traversal: curr = curr.next
-        else if (valStr.match(/^(\w+)\.(left|right|next|prev)$/)) {
-          const travMatch = valStr.match(/^(\w+)\.(left|right|next|prev)$/);
-          const parentName = travMatch[1];
-          const pointerName = travMatch[2];
-          const parentRef = variables[parentName];
-          if (parentRef && parentRef.type === 'ref' && heap[parentRef.id]) {
-            const targetId = heap[parentRef.id][pointerName];
-            if (targetId) {
-              variables[name] = { type: 'ref', id: targetId };
-            } else {
-              variables[name] = null;
-            }
-          } else {
-            variables[name] = null;
-          }
-        }
-        else if (variables[valStr] !== undefined) {
-          variables[name] = variables[valStr];
-        } else {
-          const num = Number(valStr);
-          variables[name] = isNaN(num) ? valStr.replace(/['"]/g, '') : num;
-        }
-      }
+      continue;
     }
     
-    history.push(captureState(lineNum, rawLine.trim(), why));
-  });
+    executeSingleLine(rawLine, lineIdx + 1);
+    lineIdx++;
+  }
   
   return history;
 };
@@ -365,7 +507,6 @@ const compileAndRun = (rawCode, language) => {
   const history = [];
   const code = convertHashComments(rawCode);
   
-  // Babel Standalone Plugin to statically capture local variable scope
   const instrumentPlugin = ({ types: t }) => {
     const varNames = new Set();
     return {
@@ -450,7 +591,6 @@ const compileAndRun = (rawCode, language) => {
   
   if (language === 'javascript' && window.Babel) {
     try {
-      // Compiles using 'env' preset to transpile modern classes & ES6 syntax safely
       instrumentedCode = window.Babel.transform(code, { 
         presets: ['env'],
         plugins: [instrumentPlugin], 
@@ -504,7 +644,6 @@ const compileAndRun = (rawCode, language) => {
           return clone;
         };
 
-        // First pass: clone memory objects
         for (let key in scope) {
           const val = scope[key];
           if (val === undefined || typeof val === 'function') continue;
@@ -525,7 +664,6 @@ const compileAndRun = (rawCode, language) => {
           }
         }
 
-        // Second pass: link tags
         for (let key in scope) {
           const val = scope[key];
           if (val && typeof val === 'object' && !Array.isArray(val)) {
@@ -594,21 +732,26 @@ const preprocessImage = (imageFile) => {
       
       ctx.drawImage(img, 0, 0);
       
+      // Grayscale + High contrast enhancement (superior to flat binarization)
       const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = imgData.data;
+      const contrastFactor = (259 * (140 + 255)) / (255 * (259 - 140));
       for (let i = 0; i < data.length; i += 4) {
         const r = data[i];
         const g = data[i + 1];
         const b = data[i + 2];
         const gray = 0.299 * r + 0.587 * g + 0.114 * b;
         
-        const v = gray < 120 ? 0 : 255;
-        data[i] = v;
-        data[i + 1] = v;
-        data[i + 2] = v;
+        // High contrast adjustment
+        const enhanced = contrastFactor * (gray - 128) + 128;
+        const clamped = Math.max(0, Math.min(255, enhanced));
+        
+        data[i] = clamped;
+        data[i + 1] = clamped;
+        data[i + 2] = clamped;
       }
       ctx.putImageData(imgData, 0, 0);
-      resolve(canvas); // Resolve with Canvas directly for speed and memory efficiency
+      resolve(canvas);
     };
   });
 };
@@ -621,7 +764,7 @@ const detectLanguage = (text) => {
   if (normalized.includes('public class ') || normalized.includes('system.out.print') || normalized.includes('public static void main')) {
     return 'java';
   }
-  if (normalized.includes('def ') || normalized.includes('import ') && normalized.includes(':') || normalized.includes('print ') && !normalized.includes(';')) {
+  if (normalized.includes('def ') || (normalized.includes('import ') && normalized.includes(':')) || (normalized.includes('print ') && !normalized.includes(';'))) {
     return 'python';
   }
   if (normalized.includes('let ') || normalized.includes('const ') || normalized.includes('console.log') || normalized.includes('document.get') || normalized.includes('function ')) {
@@ -894,6 +1037,15 @@ const CodeVisualizer = () => {
     }
   }, [isPlaying, speed, tokens.length]);
 
+  // Update editor value directly via reference to avoid syncing/rendering lag
+  const updateCodeAndEditor = (newCode, lang) => {
+    setCode(newCode);
+    if (lang) setLanguage(lang);
+    if (editorRef.current) {
+      editorRef.current.setValue(newCode);
+    }
+  };
+
   const handleScanImage = async (e) => {
     const file = e.target.files[0];
     if (!file) return;
@@ -906,11 +1058,16 @@ const CodeVisualizer = () => {
         throw new Error("Tesseract engine failed to load. Please check your internet connection.");
       }
       const { data } = await worker.recognize(processedCanvas, 'eng');
-      const scannedText = data.text.replace(/‘|’|`|´/g, "'").replace(/“|”/g, '"');
       
-      setCode(scannedText);
+      // Clean scanned text of curly quotes and spacing glitches
+      const scannedText = data.text
+        .replace(/[\u2018\u2019\u201A\u201B\u00B4\u02CB`]/g, "'")
+        .replace(/[\u201C\u201D\u201E\u201F]/g, '"')
+        .replace(/\u00A0/g, ' ')
+        .replace(/\r\n/g, '\n');
+      
       const detectedLang = detectLanguage(scannedText);
-      setLanguage(detectedLang);
+      updateCodeAndEditor(scannedText, detectedLang);
     } catch (err) { 
       setError('OCR Scanner Failed: ' + err.message); 
     } finally { 
@@ -921,8 +1078,7 @@ const CodeVisualizer = () => {
   const loadTemplate = (templateKey) => {
     const template = CODE_TEMPLATES[templateKey];
     if (template) {
-      setCode(template.code);
-      setLanguage(template.language);
+      updateCodeAndEditor(template.code, template.language);
       reset();
     }
   };
