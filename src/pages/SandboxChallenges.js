@@ -35,7 +35,9 @@ const SandboxChallenges = () => {
         }
 
         if (window.loadPyodide) {
-          const p = await window.loadPyodide();
+          const p = await window.loadPyodide({
+            indexURL: "https://cdn.jsdelivr.net/pyodide/v0.26.4/full/"
+          });
           if (isMounted) setPyodide(p);
         } else {
           setErrorMSG("Failed to load Python Runtime. Please check your internet connection.");

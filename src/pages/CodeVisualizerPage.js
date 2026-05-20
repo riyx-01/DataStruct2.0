@@ -165,6 +165,8 @@ except Exception as e:
 finally:
     sys.settrace(None)
     sys.stdout = sys.__stdout__
+    import json
+    trace_history_json = json.dumps(trace_state.history)
 `;
 
 // ==================== CODE TEMPLATES ====================
@@ -412,7 +414,7 @@ const simulateExecution = (rawCode, language) => {
     };
   };
 
-  // Expression Resolver with side-effects (prefix/postfix increments, index lookups)
+  // Expression Resolver with side-effects (prefix/postfix increments, index lookups, method calls)
   const resolveExpression = (expr) => {
     const clean = expr.trim();
     if (clean === 'null' || clean === 'None' || clean === 'nullptr' || clean === 'undefined') {
@@ -423,6 +425,33 @@ const simulateExecution = (rawCode, language) => {
     }
     if (!isNaN(clean) && clean !== '') {
       return Number(clean);
+    }
+    
+    // Array/List mutation method calls with return values: stack.pop(), queue.pop(0), stack.peek()
+    const methodCallMatch = clean.match(/^([\w*&]+)\.(pop|shift|peek)\s*\(([^)]*)\)$/);
+    if (methodCallMatch) {
+      const arrayName = methodCallMatch[1].replace(/^[*&]+/, '');
+      const method = methodCallMatch[2];
+      const argsStr = methodCallMatch[3].trim();
+      
+      if (Array.isArray(variables[arrayName])) {
+        const arr = variables[arrayName];
+        if (method === 'pop') {
+          if (argsStr !== '') {
+            const idx = resolveExpression(argsStr);
+            if (idx >= 0 && idx < arr.length) {
+              return arr.splice(idx, 1)[0];
+            }
+            return undefined;
+          } else {
+            return arr.pop();
+          }
+        } else if (method === 'shift') {
+          return arr.shift();
+        } else if (method === 'peek') {
+          return arr.length > 0 ? arr[arr.length - 1] : undefined;
+        }
+      }
     }
     
     // Prefix / Postfix increments
@@ -547,6 +576,9 @@ const simulateExecution = (rawCode, language) => {
         const args = argsStr.split(',').map(a => a.trim());
         const resolvedArgs = args.map(arg => {
           const val = resolveExpression(arg);
+          if (Array.isArray(val)) {
+             return "[" + val.map(x => typeof x === 'object' ? JSON.stringify(x) : String(x)).join(', ') + "]";
+          }
           return val !== undefined ? String(val) : arg;
         });
         currentOutput.push(resolvedArgs.join(' '));
@@ -1290,7 +1322,8 @@ const CodeVisualizer = () => {
         setError(null);
         pyodide.globals.set('user_code', code);
         await pyodide.runPythonAsync(PYTHON_TRACE_SCRIPT);
-        steps = pyodide.globals.get('trace_state').history.toJs();
+        const jsonStr = pyodide.globals.get('trace_history_json');
+        steps = JSON.parse(jsonStr);
       } else {
         steps = compileAndRun(code, language);
       }
