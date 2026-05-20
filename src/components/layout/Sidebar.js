@@ -42,7 +42,6 @@ const Sidebar = ({ user, setUser }) => {
     { path: '/visualizer/minheap', label: 'Min Heap' },
     // Graphs & Hashes
     { path: '/visualizer/graph', label: 'Graph (Adj List)' },
-    { path: '/visualizer/graph_matrix', label: 'Graph (Adj Matrix)' },
     { path: '/visualizer/hashtable', label: 'Hash Table' }
   ];
 

@@ -16,7 +16,7 @@ import HeapVisualizer from '../components/visualizers/HeapVisualizer';
 import {
   DynamicArrayVisualizer, CircularQueueVisualizer,
   DoublyLinkedListVisualizer, ExtendedTreeVisualizer,
-  TrieVisualizer, GraphMatrixVisualizer,
+  TrieVisualizer,
   BloomFilterVisualizer, DisjointSetVisualizer
 } from '../components/visualizers/AdvancedVisualizers';
 
@@ -34,7 +34,6 @@ const structureInfo = {
   avl: { title: 'AVL Tree', subtitle: 'Self balancing binary search tree', maxSize: 7 },
   trie: { title: 'Trie (Prefix Tree)', subtitle: 'Tree optimized for string search', maxSize: 7 },
   graph: { title: 'Graph (Adj List)', subtitle: 'Network of vertices connected by edges via lists', maxSize: 5 },
-  graph_matrix: { title: 'Graph (Adj Matrix)', subtitle: 'Network of vertices connected by edges via matrices', maxSize: 4 },
   hashtable: { title: 'Hash Table', subtitle: 'Key-value pairs with O(1) average lookup', maxSize: 6 },
   bloom: { title: 'Bloom Filter', subtitle: 'Probabilistic set representation', maxSize: 8 },
   disjoint: { title: 'Disjoint Set (Union-Find)', subtitle: 'Tracks partitioned elements', maxSize: 8 },
@@ -88,7 +87,6 @@ const VisualizerPage = () => {
         setData([10, 20, 30, 40, 50, 60, 70]);
         break;
       case 'graph':
-      case 'graph_matrix':
         setData([1, 2, 3, 4]);
         break;
       case 'hashtable':
@@ -284,7 +282,6 @@ const VisualizerPage = () => {
       case 'tree': return <TreeVisualizer {...commonProps} />;
       case 'bst': return <TreeVisualizer {...commonProps} />;
       case 'graph': return <GraphVisualizer {...commonProps} />;
-      case 'graph_matrix': return <GraphMatrixVisualizer {...commonProps} />;
       case 'hashtable': return <HashTableVisualizer {...commonProps} />;
       case 'heap': return <HeapVisualizer {...commonProps} />;
       case 'minheap': return <ExtendedTreeVisualizer {...commonProps} type="minheap" />;
