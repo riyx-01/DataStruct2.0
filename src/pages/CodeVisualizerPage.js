@@ -1,5 +1,4 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-// Force reload for UI updates
 import { motion, AnimatePresence } from 'framer-motion';
 import Editor from '@monaco-editor/react';
 import Hyperspeed from '../components/ui/Hyperspeed';
@@ -10,11 +9,69 @@ import {
 
 import './CodeVisualizerPage.css';
 
+// ==================== CODE TEMPLATES ====================
+const CODE_TEMPLATES = {
+  bst_insert: {
+    name: "BST Insertion",
+    language: "javascript",
+    code: `class Node {
+  constructor(val) {
+    this.val = val;
+    this.left = null;
+    this.right = null;
+  }
+}
+
+let root = new Node(10);
+root.left = new Node(5);
+root.right = new Node(15);
+root.left.left = new Node(3);
+root.left.right = new Node(7);
+
+console.log("Binary Search Tree initialized!");`
+  },
+  linked_list_ops: {
+    name: "Linked List Deletion",
+    language: "javascript",
+    code: `class Node {
+  constructor(val) {
+    this.val = val;
+    this.next = null;
+  }
+}
+
+let head = new Node(10);
+head.next = new Node(20);
+head.next.next = new Node(30);
+
+console.log("Deleting node 20...");
+// Unlink node 20
+head.next = head.next.next;
+console.log("Node 20 deleted successfully.");`
+  },
+  array_ops: {
+    name: "Stack / Array Operations",
+    language: "javascript",
+    code: `let stack = [10, 20, 30];
+console.log("Stack initialized:", stack);
+
+stack.push(40);
+console.log("Pushed 40:", stack);
+
+stack.pop();
+console.log("Popped element.");`
+  }
+};
+
 // ==================== EXECUTION ENGINE ====================
 
 const __clone = (obj) => {
   if (!obj || typeof obj !== 'object') return obj;
-  return JSON.parse(JSON.stringify(obj));
+  try {
+    return JSON.parse(JSON.stringify(obj));
+  } catch (e) {
+    return obj;
+  }
 };
 
 const convertHashComments = (text) => {
@@ -37,19 +94,103 @@ const convertHashComments = (text) => {
   return processedLines.join('\n');
 };
 
+// Intelligent Virtual Simulator for Javascript / Python / C++ / Java
 const simulateExecution = (rawCode, language) => {
   const uniformCode = convertHashComments(rawCode);
   const lines = uniformCode.split('\n');
   const history = [];
+  
   const variables = {};
-  const memoryStructures = { arrays: {}, trees: {}, graphs: {}, stacks: {} };
+  const heap = {}; // id -> node structure
+  let objectIdCounter = 1;
   let currentOutput = [];
   
+  const createNode = (val) => {
+    const id = `0x${objectIdCounter++}`;
+    heap[id] = {
+      id,
+      val: isNaN(val) ? val : Number(val),
+      left: null,
+      right: null,
+      next: null,
+      prev: null
+    };
+    return id;
+  };
+
+  const captureState = (lineNum, codeLine, why) => {
+    const variablesCopy = {};
+    const memoryStructures = { arrays: {}, trees: {}, graphs: {}, stacks: {} };
+    const cloneMap = new Map();
+    
+    const cloneStructure = (id) => {
+      if (!id || !heap[id]) return null;
+      if (cloneMap.has(id)) {
+        return { isReference: true, targetId: id };
+      }
+      const node = heap[id];
+      const clone = {
+        id: id,
+        val: node.val,
+        variables: []
+      };
+      cloneMap.set(id, clone);
+      
+      // Determine links based on existing fields
+      if (node.left !== undefined) clone.left = cloneStructure(node.left);
+      if (node.right !== undefined) clone.right = cloneStructure(node.right);
+      if (node.next !== undefined) clone.next = cloneStructure(node.next);
+      if (node.prev !== undefined) clone.prev = cloneStructure(node.prev);
+      
+      return clone;
+    };
+    
+    // Process variables
+    for (let key in variables) {
+      const val = variables[key];
+      if (val && typeof val === 'object' && val.type === 'ref') {
+        const rootClone = cloneStructure(val.id);
+        if (rootClone) {
+          memoryStructures.trees[key] = rootClone;
+        }
+      } else if (Array.isArray(val)) {
+        memoryStructures.arrays[key] = val.map(item => {
+          if (item && typeof item === 'object' && item.type === 'ref') {
+            return cloneStructure(item.id);
+          }
+          return item;
+        });
+      } else {
+        variablesCopy[key] = val;
+      }
+    }
+    
+    // Label variables pointing to nodes
+    for (let key in variables) {
+      const val = variables[key];
+      if (val && typeof val === 'object' && val.type === 'ref') {
+        const clone = cloneMap.get(val.id);
+        if (clone) {
+          clone.variables.push(key);
+        }
+      }
+    }
+    
+    return {
+      line: lineNum,
+      code: codeLine,
+      variables: variablesCopy,
+      memoryStructures,
+      why,
+      deletedElements: [],
+      output: [...currentOutput]
+    };
+  };
+
   lines.forEach((rawLine, idx) => {
     const lineNum = idx + 1;
     let line = rawLine.trim();
     
-    // Strip trailing or line comments
     if (line.includes('//')) {
       line = line.split('//')[0].trim();
     }
@@ -60,136 +201,152 @@ const simulateExecution = (rawCode, language) => {
     
     let why = "Executing logical instruction.";
     
-    // Check if line is a print statement
+    // 1. Console outputs
     if (line.includes('print(') || line.includes('console.log')) {
       why = "Standard Output: Broadcasting internal state to the virtual console.";
-      
       const printMatch = line.match(/(?:print|console\.log)\(([^)]*)\)/);
       if (printMatch) {
         const argsStr = printMatch[1];
-        
-        // Simple comma splitter that avoids splitting inside strings
-        const args = [];
-        let currentArg = "";
-        let inSingleQuote = false;
-        let inDoubleQuote = false;
-        for (let i = 0; i < argsStr.length; i++) {
-          const char = argsStr[i];
-          if (char === "'" && !inDoubleQuote) inSingleQuote = !inSingleQuote;
-          else if (char === '"' && !inSingleQuote) inDoubleQuote = !inDoubleQuote;
-          
-          if (char === ',' && !inSingleQuote && !inDoubleQuote) {
-            args.push(currentArg.trim());
-            currentArg = "";
-          } else {
-            currentArg += char;
-          }
-        }
-        if (currentArg.trim()) {
-          args.push(currentArg.trim());
-        }
-        
+        const args = argsStr.split(',').map(a => a.trim());
         const resolvedArgs = args.map(arg => {
           if ((arg.startsWith('"') && arg.endsWith('"')) || (arg.startsWith("'") && arg.endsWith("'"))) {
             return arg.slice(1, -1);
           }
-          if (variables[arg] !== undefined) return String(variables[arg]);
-          if (memoryStructures.arrays[arg] !== undefined) return JSON.stringify(memoryStructures.arrays[arg]);
-          if (memoryStructures.trees[arg] !== undefined) return '[Binary Tree]';
+          if (variables[arg] !== undefined) {
+            const val = variables[arg];
+            if (val && typeof val === 'object' && val.type === 'ref') {
+              return `[Node ${val.id.substring(2)} (val=${heap[val.id]?.val})]`;
+            }
+            return String(val);
+          }
+          const propMatch = arg.match(/^(\w+)\.(\w+)$/);
+          if (propMatch) {
+            const varName = propMatch[1];
+            const propName = propMatch[2];
+            const ref = variables[varName];
+            if (ref && ref.type === 'ref' && heap[ref.id]) {
+              return String(heap[ref.id][propName]);
+            }
+          }
           return arg;
         });
         currentOutput.push(resolvedArgs.join(' '));
       }
     }
-    // Check for push or append (support spaces, e.g. queue. append)
-    else if (line.includes('arr.push') || line.includes('.push') || line.includes('.append')) {
-      why = "Heap Push: Growing a dynamic structure dynamically in memory.";
-      const appendMatch = line.match(/(\w+)\.\s*(?:append|push)\(([^)]*)\)/);
-      if (appendMatch) {
-        const name = appendMatch[1];
-        const valStr = appendMatch[2].trim();
-        const val = isNaN(valStr) ? (valStr.replace(/['"]/g, '') || '') : Number(valStr);
-        if (!memoryStructures.arrays[name]) {
-          memoryStructures.arrays[name] = [];
-        }
-        memoryStructures.arrays[name] = [...memoryStructures.arrays[name], val];
-      }
-    }
-    // Check for pop (support spaces, e.g. queue. pop)
-    else if (line.includes('.pop(') || line.includes('.pop0') || line.includes('.pop(0)')) {
-      why = "Heap Pop: Dequeuing or removing an element from the dynamic structure.";
-      const popMatch = line.match(/(\w+)\.\s*pop\(([^)]*)\)/);
-      if (popMatch) {
-        const name = popMatch[1];
-        const arg = popMatch[2].trim();
-        if (memoryStructures.arrays[name]) {
-          const arrCopy = [...memoryStructures.arrays[name]];
-          if (arg === '0') {
-            arrCopy.shift();
-          } else {
-            arrCopy.pop();
-          }
-          memoryStructures.arrays[name] = arrCopy;
-        }
-      }
-    }
-    // Check tree node allocation
-    else if (line.includes('root =') || line.includes('Node(') || line.includes('new Node')) {
+    // 2. Node allocations: let x = new Node(val)
+    else if (line.match(/(?:let|const|var)?\s*(\w+)\s*=\s*(?:new\s+)?Node\(([^)]*)\)/)) {
       why = "Memory Allocation: Creating a new object in the heap. This allocates space for value and child pointers.";
-      
-      const treeMatch = line.match(/(\w+)\s*=\s*(?:new\s+)?Node\(([^)]*)\)/);
-      if (treeMatch) {
-        const name = treeMatch[1];
-        const valStr = treeMatch[2].trim();
-        const val = isNaN(valStr) ? (valStr.replace(/['"]/g, '') || 10) : Number(valStr);
-        memoryStructures.trees[name] = { val: val, left: null, right: null };
+      const match = line.match(/(?:let|const|var)?\s*(\w+)\s*=\s*(?:new\s+)?Node\(([^)]*)\)/);
+      const name = match[1];
+      const valStr = match[2].trim();
+      const val = isNaN(valStr) ? valStr.replace(/['"]/g, '') : Number(valStr);
+      const id = createNode(val);
+      variables[name] = { type: 'ref', id };
+    }
+    // 3. Pointer linkages: root.left = new Node(val)
+    else if (line.match(/(\w+)\.(left|right|next|prev)\s*=\s*(?:new\s+)?Node\(([^)]*)\)/)) {
+      why = "Memory Allocation & Link: Allocating a new Node and establishing a pointer reference.";
+      const match = line.match(/(\w+)\.(left|right|next|prev)\s*=\s*(?:new\s+)?Node\(([^)]*)\)/);
+      const parentName = match[1];
+      const pointerName = match[2];
+      const valStr = match[3].trim();
+      const val = isNaN(valStr) ? valStr.replace(/['"]/g, '') : Number(valStr);
+      const parentRef = variables[parentName];
+      if (parentRef && parentRef.type === 'ref' && heap[parentRef.id]) {
+        const childId = createNode(val);
+        heap[parentRef.id][pointerName] = childId;
       }
+    }
+    // 4. Pointer updates / Deletions: root.left = temp, root.left = null
+    else if (line.match(/(\w+)\.(left|right|next|prev)\s*=\s*(.*)/)) {
+      why = "Pointer Update: Modifying the link between nodes. This changes the structural topology.";
+      const match = line.match(/(\w+)\.(left|right|next|prev)\s*=\s*(.*)/);
+      const parentName = match[1];
+      const pointerName = match[2];
+      let targetName = match[3].trim();
+      if (targetName.endsWith(';')) targetName = targetName.slice(0, -1).trim();
       
-      const treeLeftRightMatch = line.match(/(\w+)\.(left|right)\s*=\s*(?:new\s+)?Node\(([^)]*)\)/);
-      if (treeLeftRightMatch) {
-        const parentName = treeLeftRightMatch[1];
-        const childSide = treeLeftRightMatch[2];
-        const valStr = treeLeftRightMatch[3].trim();
-        const val = isNaN(valStr) ? (valStr.replace(/['"]/g, '') || 5) : Number(valStr);
-        if (memoryStructures.trees[parentName]) {
-          const parentCopy = __clone(memoryStructures.trees[parentName]);
-          parentCopy[childSide] = { val: val, left: null, right: null };
-          memoryStructures.trees[parentName] = parentCopy;
+      const parentRef = variables[parentName];
+      if (parentRef && parentRef.type === 'ref' && heap[parentRef.id]) {
+        if (targetName === 'null' || targetName === 'None' || targetName === 'nullptr' || targetName === 'undefined') {
+          heap[parentRef.id][pointerName] = null;
+        } else {
+          const targetRef = variables[targetName];
+          if (targetRef && targetRef.type === 'ref') {
+            heap[parentRef.id][pointerName] = targetRef.id;
+          }
         }
       }
     }
-    else if (line.includes('return')) {
-      why = "Returning Control: Exiting current frame and passing value back to the caller.";
+    // 5. Array Push
+    else if (line.includes('.push') || line.includes('.append')) {
+      why = "Heap Push: Growing a dynamic array structure in memory.";
+      const match = line.match(/(\w+)\.\s*(?:append|push)\(([^)]*)\)/);
+      if (match) {
+        const name = match[1];
+        const valStr = match[2].trim();
+        let val = isNaN(valStr) ? valStr.replace(/['"]/g, '') : Number(valStr);
+        if (variables[valStr] !== undefined) {
+          val = variables[valStr];
+        }
+        if (!variables[name]) variables[name] = [];
+        variables[name].push(val);
+      }
     }
-    else if (line.includes('.left') || line.includes('.right')) {
-      why = "Pointer Update: Modifying the link between nodes. This changes the structural topology of the tree.";
+    // 6. Array Pop
+    else if (line.includes('.pop')) {
+      why = "Heap Pop: Dequeuing or removing an element from the dynamic structure.";
+      const match = line.match(/(\w+)\.\s*pop\(([^)]*)\)/);
+      if (match) {
+        const name = match[1];
+        const arg = match[2].trim();
+        if (Array.isArray(variables[name])) {
+          if (arg === '0') {
+            variables[name].shift();
+          } else {
+            variables[name].pop();
+          }
+        }
+      }
     }
-    else if (line.includes('.next')) {
-      why = "Linked Connection: Updating the directional edge in the list structure.";
-    }
-    else if (line.includes('for ') || line.includes('while ')) {
-      why = "Iterative Branch: Evaluating the loop guard to decide if another iteration is required.";
-    }
-    else if (line.includes('if ')) {
-      why = "Logical Fork: Evaluating a boolean predicate to fork execution path.";
-    }
+    // 7. General Assignment & Traversals
     else if (line.includes('=')) {
-      why = "State Mutation: Binding a new value to a variable descriptor in the current stack frame.";
-      
-      const assignMatch = line.match(/(?:let|const|var)?\s*(\w+)\s*=\s*(.*)/);
-      if (assignMatch) {
-        const name = assignMatch[1];
-        let valStr = assignMatch[2].trim();
-        if (valStr.endsWith(';')) valStr = valStr.slice(0, -1);
+      why = "State Mutation: Binding a new value to a variable descriptor.";
+      const match = line.match(/(?:let|const|var)?\s*(\w+)\s*=\s*(.*)/);
+      if (match) {
+        const name = match[1];
+        let valStr = match[2].trim();
+        if (valStr.endsWith(';')) valStr = valStr.slice(0, -1).trim();
+        
         if (valStr === '[]') {
-          memoryStructures.arrays[name] = [];
+          variables[name] = [];
         } else if (valStr.startsWith('[') && valStr.endsWith(']')) {
           try {
             const validJsonStr = valStr.replace(/'/g, '"');
-            memoryStructures.arrays[name] = JSON.parse(validJsonStr);
+            variables[name] = JSON.parse(validJsonStr);
           } catch {
-            memoryStructures.arrays[name] = [];
+            variables[name] = [];
           }
+        } 
+        // Traversal: curr = curr.next
+        else if (valStr.match(/^(\w+)\.(left|right|next|prev)$/)) {
+          const travMatch = valStr.match(/^(\w+)\.(left|right|next|prev)$/);
+          const parentName = travMatch[1];
+          const pointerName = travMatch[2];
+          const parentRef = variables[parentName];
+          if (parentRef && parentRef.type === 'ref' && heap[parentRef.id]) {
+            const targetId = heap[parentRef.id][pointerName];
+            if (targetId) {
+              variables[name] = { type: 'ref', id: targetId };
+            } else {
+              variables[name] = null;
+            }
+          } else {
+            variables[name] = null;
+          }
+        }
+        else if (variables[valStr] !== undefined) {
+          variables[name] = variables[valStr];
         } else {
           const num = Number(valStr);
           variables[name] = isNaN(num) ? valStr.replace(/['"]/g, '') : num;
@@ -197,35 +354,91 @@ const simulateExecution = (rawCode, language) => {
       }
     }
     
-    history.push({
-      line: lineNum,
-      code: rawLine.trim(), // Keep raw line text for visual match
-      variables: __clone(variables),
-      memoryStructures: __clone(memoryStructures),
-      why: why,
-      deletedElements: [],
-      output: [...currentOutput]
-    });
+    history.push(captureState(lineNum, rawLine.trim(), why));
   });
   
   return history;
 };
 
+// Compile and Trace JS natively using AST instrumentation
 const compileAndRun = (rawCode, language) => {
   const history = [];
   const code = convertHashComments(rawCode);
   
+  // Babel Standalone Plugin to statically capture local variable scope
   const instrumentPlugin = ({ types: t }) => {
+    const varNames = new Set();
     return {
       visitor: {
+        Program: {
+          enter(path) {
+            varNames.clear();
+            path.traverse({
+              VariableDeclarator(p) {
+                if (p.node.id && p.node.id.name) {
+                  varNames.add(p.node.id.name);
+                }
+              },
+              AssignmentExpression(p) {
+                if (p.node.left && p.node.left.type === 'Identifier') {
+                  varNames.add(p.node.left.name);
+                }
+              },
+              FunctionDeclaration(p) {
+                if (p.node.id && p.node.id.name) {
+                  varNames.add(p.node.id.name);
+                }
+                p.node.params.forEach(param => {
+                  if (param.type === 'Identifier') {
+                    varNames.add(param.name);
+                  }
+                });
+              },
+              ClassDeclaration(p) {
+                if (p.node.id && p.node.id.name) {
+                  varNames.add(p.node.id.name);
+                }
+              }
+            });
+          }
+        },
         Statement(path) {
           if (!path.node.loc || path.node.__injected) return;
           if (!path.parentPath.isBlockStatement() && !path.parentPath.isProgram()) return;
+          
           const line = path.node.loc.start.line;
           try {
-            const traceStmt = t.expressionStatement(t.callExpression(t.identifier('__trace'), [t.numericLiteral(line), t.callExpression(t.identifier('eval'), [t.stringLiteral('({ ...typeof this !== "undefined" ? this : {}, ...typeof arguments !== "undefined" ? arguments : {}, ...((() => { try { return Object.fromEntries(Object.entries(eval("this") || {})); } catch { return {}; } })()) })') ] )]));
+            const properties = [];
+            varNames.forEach(name => {
+              properties.push(
+                t.objectProperty(
+                  t.identifier(name),
+                  t.conditionalExpression(
+                    t.binaryExpression(
+                      '!==',
+                      t.unaryExpression('typeof', t.identifier(name)),
+                      t.stringLiteral('undefined')
+                    ),
+                    t.identifier(name),
+                    t.identifier('undefined')
+                  )
+                )
+              );
+            });
+            
+            const scopeExpr = t.objectExpression(properties);
+            const traceCall = t.callExpression(t.identifier('__trace'), [
+              t.numericLiteral(line),
+              scopeExpr
+            ]);
+            const traceStmt = t.expressionStatement(traceCall);
             traceStmt.__injected = true;
-            path.insertAfter(traceStmt);
+            
+            if (path.isReturnStatement()) {
+              path.insertBefore(traceStmt);
+            } else {
+              path.insertAfter(traceStmt);
+            }
           } catch(e) { console.error(e); }
         }
       }
@@ -235,9 +448,14 @@ const compileAndRun = (rawCode, language) => {
   let instrumentedCode = "";
   let success = false;
   
-  if (language === 'javascript') {
+  if (language === 'javascript' && window.Babel) {
     try {
-      instrumentedCode = window.Babel.transform(code, { plugins: [instrumentPlugin], filename: 'visualizer.js' }).code;
+      // Compiles using 'env' preset to transpile modern classes & ES6 syntax safely
+      instrumentedCode = window.Babel.transform(code, { 
+        presets: ['env'],
+        plugins: [instrumentPlugin], 
+        filename: 'visualizer.js' 
+      }).code;
       
       let currentOutput = [];
       let stepCount = 0;
@@ -247,21 +465,81 @@ const compileAndRun = (rawCode, language) => {
         const variables = {};
         const memoryStructures = { arrays: {}, trees: {}, graphs: {}, stacks: {} };
 
+        const visited = new Map();
+        let objectIdCounter = 1;
+        const getObjectId = (obj) => {
+          if (!obj || typeof obj !== 'object') return null;
+          if (!visited.has(obj)) {
+            visited.set(obj, `0x${objectIdCounter++}`);
+          }
+          return visited.get(obj);
+        };
+
+        const cloneMap = new Map();
+
+        const cloneStructure = (node) => {
+          if (!node || typeof node !== 'object') return node;
+          if (Array.isArray(node)) {
+            return node.map(item => cloneStructure(item));
+          }
+          
+          const id = getObjectId(node);
+          if (cloneMap.has(id)) {
+            return { isReference: true, targetId: id };
+          }
+
+          const clone = {
+            id: id,
+            val: node.val !== undefined ? node.val : (node.value !== undefined ? node.value : node.data),
+            variables: []
+          };
+          
+          cloneMap.set(id, clone);
+
+          if ('left' in node) clone.left = cloneStructure(node.left);
+          if ('right' in node) clone.right = cloneStructure(node.right);
+          if ('next' in node) clone.next = cloneStructure(node.next);
+          if ('prev' in node) clone.prev = cloneStructure(node.prev);
+
+          return clone;
+        };
+
+        // First pass: clone memory objects
         for (let key in scope) {
           const val = scope[key];
           if (val === undefined || typeof val === 'function') continue;
-          if (Array.isArray(val)) { memoryStructures.arrays[key] = __clone(val); }
-          else if (typeof val === 'object' && val !== null) {
-             if ('left' in val || 'right' in val || 'value' in val || 'val' in val) memoryStructures.trees[key] = __clone(val);
-             else if ('next' in val) memoryStructures.graphs[key] = __clone(val);
-             else variables[key] = val;
-          } else variables[key] = val;
+          
+          if (Array.isArray(val)) {
+            memoryStructures.arrays[key] = val.map(item => {
+              if (item && typeof item === 'object') return cloneStructure(item);
+              return item;
+            });
+          } else if (typeof val === 'object' && val !== null) {
+             if ('left' in val || 'right' in val || 'next' in val || 'prev' in val || 'val' in val || 'value' in val) {
+               memoryStructures.trees[key] = cloneStructure(val);
+             } else {
+               variables[key] = __clone(val);
+             }
+          } else {
+            variables[key] = val;
+          }
+        }
+
+        // Second pass: link tags
+        for (let key in scope) {
+          const val = scope[key];
+          if (val && typeof val === 'object' && !Array.isArray(val)) {
+            const id = getObjectId(val);
+            const clone = cloneMap.get(id);
+            if (clone) {
+              clone.variables.push(key);
+            }
+          }
         }
 
         const codeLine = rawCode.split('\n')[line - 1]?.trim() || '';
         let why = "Executing logical instruction.";
         
-        // Semantic Heuristics for X-Ray
         if (codeLine.includes('root =') || codeLine.includes('Node(')) why = "Memory Allocation: Creating a new object in the heap. This allocates space for value and child pointers.";
         else if (codeLine.includes('return')) why = "Returning Control: Exiting current frame and passing value back to the caller.";
         else if (codeLine.includes('.left') || codeLine.includes('.right')) why = "Pointer Update: Modifying the link between nodes. This changes the structural topology of the tree.";
@@ -283,7 +561,11 @@ const compileAndRun = (rawCode, language) => {
         });
       };
 
-      const fakeConsole = { log: (...args) => { currentOutput.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')); } };
+      const fakeConsole = { 
+        log: (...args) => { 
+          currentOutput.push(args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ')); 
+        } 
+      };
       
       const fn = new Function('__trace', '__clone', 'console', instrumentedCode);
       fn(__trace, __clone, fakeConsole);
@@ -310,10 +592,8 @@ const preprocessImage = (imageFile) => {
       canvas.width = img.width;
       canvas.height = img.height;
       
-      // Draw image
       ctx.drawImage(img, 0, 0);
       
-      // Apply grayscaling and thresholding (contrast boost)
       const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       const data = imgData.data;
       for (let i = 0; i < data.length; i += 4) {
@@ -322,14 +602,13 @@ const preprocessImage = (imageFile) => {
         const b = data[i + 2];
         const gray = 0.299 * r + 0.587 * g + 0.114 * b;
         
-        // Binarization (threshold = 120)
         const v = gray < 120 ? 0 : 255;
         data[i] = v;
         data[i + 1] = v;
         data[i + 2] = v;
       }
       ctx.putImageData(imgData, 0, 0);
-      resolve(canvas.toDataURL('image/jpeg', 0.9));
+      resolve(canvas); // Resolve with Canvas directly for speed and memory efficiency
     };
   });
 };
@@ -367,11 +646,101 @@ const GlassArray = ({ name, arr }) => (
   </div>
 );
 
+const GlassList = ({ name, head }) => {
+  const nodes = [];
+  let curr = head;
+  const visited = new Set();
+
+  while (curr) {
+    if (curr.isReference) {
+      nodes.push({ isRef: true, targetId: curr.targetId });
+      break;
+    }
+    const id = curr.id;
+    if (visited.has(id)) {
+      nodes.push({ isCycle: true, targetId: id });
+      break;
+    }
+    visited.add(id);
+    nodes.push(curr);
+    curr = curr.next;
+  }
+
+  return (
+    <div className="iso-glass-container">
+      <div className="iso-title">Linked List : <span>{name}</span></div>
+      <div className="iso-list-nodes">
+        {nodes.map((node, idx) => {
+          if (node.isRef || node.isCycle) {
+            return (
+              <div key={idx} className="iso-list-node-ref">
+                <ChevronRight className="iso-list-arrow" />
+                <div className="iso-list-ref-bubble">
+                  Cycle to {node.targetId.substring(2)}
+                </div>
+              </div>
+            );
+          }
+          return (
+            <React.Fragment key={node.id}>
+              {idx > 0 && <ChevronRight className="iso-list-arrow" />}
+              <div className="iso-list-node-wrapper">
+                {node.variables && node.variables.length > 0 && (
+                  <div className="iso-node-vars">
+                    {node.variables.map(v => (
+                      <span key={v} className="iso-node-var-tag">{v}</span>
+                    ))}
+                  </div>
+                )}
+                <div className="iso-list-node">
+                  <div className="iso-list-node-val">{node.val}</div>
+                  <div className="iso-list-node-id">{node.id.substring(2)}</div>
+                </div>
+              </div>
+            </React.Fragment>
+          );
+        })}
+        {nodes.length > 0 && !nodes[nodes.length - 1].isRef && !nodes[nodes.length - 1].isCycle && (
+          <React.Fragment key="null-node">
+            <ChevronRight className="iso-list-arrow" />
+            <div className="iso-list-node null-node">
+              <span>NULL</span>
+            </div>
+          </React.Fragment>
+        )}
+      </div>
+    </div>
+  );
+};
+
 const GlassTree = ({ name, node }) => {
   const renderNode = (n) => {
     if (!n) return null;
+    if (n.isReference) {
+      return (
+        <div className="iso-tree-node-ref-bubble" style={{
+          background: 'rgba(251, 191, 36, 0.15)',
+          border: '1px solid rgba(251, 191, 36, 0.5)',
+          color: '#FBBF24',
+          padding: '4px 8px',
+          fontSize: '11px',
+          borderRadius: '8px',
+          fontWeight: 'bold',
+          marginTop: '5px'
+        }}>
+          Ref to {n.targetId.substring(2)}
+        </div>
+      );
+    }
     return (
       <div className="iso-tree-node-wrapper">
+        {n.variables && n.variables.length > 0 && (
+          <div className="iso-node-vars" style={{ marginBottom: '6px' }}>
+            {n.variables.map(v => (
+              <span key={v} className="iso-node-var-tag" style={{ background: 'rgba(16, 185, 129, 0.25)', borderColor: 'rgba(16, 185, 129, 0.6)' }}>{v}</span>
+            ))}
+          </div>
+        )}
         <div className="iso-tree-node">
           {n.val !== undefined ? n.val : n.value}
         </div>
@@ -400,7 +769,7 @@ const GlassTree = ({ name, node }) => {
 
 const CodeVisualizer = () => {
   const [language, setLanguage] = useState('javascript');
-  const [code, setCode] = useState(`class Node {\n  constructor(val) {\n    this.val = val;\n    this.left = null;\n    this.right = null;\n  }\n}\nlet root = new Node(10);\nroot.left = new Node(5);\nroot.right = new Node(15);\nconsole.log(root);`);
+  const [code, setCode] = useState(CODE_TEMPLATES.bst_insert.code);
 
   const [tokens, setTokens] = useState([]);
   const [currentStep, setCurrentStep] = useState(0);
@@ -408,11 +777,8 @@ const CodeVisualizer = () => {
   const [speed, setSpeed] = useState(1000);
   const [error, setError] = useState(null);
   
-  // Feature States
   const [deletedVault, setDeletedVault] = useState([]);
-  
   const [isScanning, setIsScanning] = useState(false);
-  const [ocrWarning, setOcrWarning] = useState(null);
   const [showExplanation, setShowExplanation] = useState(false);
   
   const timerRef = useRef(null);
@@ -429,23 +795,40 @@ const CodeVisualizer = () => {
        if (editorRef.current) { editorRef.current.layout(); }
     };
     window.addEventListener('resize', handleResize);
-    // Trigger initial layout
     setTimeout(() => editor.layout(), 100);
   };
 
   const currentState = tokens[currentStep];
 
-  // Deallocation Tracker
+  // Deallocation Tracker based on unique internal node IDs
   useEffect(() => {
     if (currentStep > 0 && tokens[currentStep-1] && tokens[currentStep]) {
-      const prevArrayKeys = Object.keys(tokens[currentStep-1].memoryStructures.arrays);
-      const currArrayKeys = Object.keys(tokens[currentStep].memoryStructures.arrays);
-      const prevTreeKeys = Object.keys(tokens[currentStep-1].memoryStructures.trees);
-      const currTreeKeys = Object.keys(tokens[currentStep].memoryStructures.trees);
+      const collectNodes = (node, acc = {}) => {
+        if (!node || typeof node !== 'object') return acc;
+        if (node.id) acc[node.id] = node;
+        if (node.left) collectNodes(node.left, acc);
+        if (node.right) collectNodes(node.right, acc);
+        if (node.next) collectNodes(node.next, acc);
+        return acc;
+      };
+
+      const prevNodes = {};
+      const currNodes = {};
+
+      Object.values(tokens[currentStep-1].memoryStructures.trees).forEach(n => collectNodes(n, prevNodes));
+      Object.values(tokens[currentStep].memoryStructures.trees).forEach(n => collectNodes(n, currNodes));
 
       const newlyDeleted = [];
-      prevArrayKeys.forEach(k => { if (!currArrayKeys.includes(k)) newlyDeleted.push({ name: k, type: 'Array', data: tokens[currentStep-1].memoryStructures.arrays[k], step: currentStep }); });
-      prevTreeKeys.forEach(k => { if (!currTreeKeys.includes(k)) newlyDeleted.push({ name: k, type: 'Tree', data: tokens[currentStep-1].memoryStructures.trees[k], step: currentStep }); });
+      Object.keys(prevNodes).forEach(id => {
+        if (!currNodes[id]) {
+          newlyDeleted.push({
+            name: `Node ${id.substring(2)}`,
+            type: prevNodes[id].hasOwnProperty('next') ? 'List Node' : 'Tree Node',
+            data: prevNodes[id],
+            step: currentStep
+          });
+        }
+      });
 
       if (newlyDeleted.length > 0) {
         setDeletedVault(prev => {
@@ -457,7 +840,7 @@ const CodeVisualizer = () => {
     if (currentStep === 0) setDeletedVault([]);
   }, [currentStep, tokens]);
 
-  // Monaco Decorations
+  // Monaco Line Highlighting
   useEffect(() => {
     if (editorRef.current && monacoRef.current && currentState?.line) {
       const editor = editorRef.current;
@@ -487,7 +870,12 @@ const CodeVisualizer = () => {
     } catch(e) { setError(e.message); setTokens([]); return []; }
   }, [code, language]);
 
-  const reset = useCallback(() => { setCurrentStep(0); setIsPlaying(false); if (timerRef.current) clearInterval(timerRef.current); setDeletedVault([]); }, []);
+  const reset = useCallback(() => { 
+    setCurrentStep(0); 
+    setIsPlaying(false); 
+    if (timerRef.current) clearInterval(timerRef.current); 
+    setDeletedVault([]); 
+  }, []);
 
   useEffect(() => {
     const timeout = setTimeout(() => { performCompilation(); reset(); }, 800);
@@ -512,22 +900,30 @@ const CodeVisualizer = () => {
     setIsScanning(true);
     setError(null);
     try {
-      // 1. Process image for ultra-high contrast (grayscale + binarize)
-      const processedImageUrl = await preprocessImage(file);
-      
-      // 2. Perform fast OCR recognition on the preprocessed image
+      const processedCanvas = await preprocessImage(file);
       const worker = window.Tesseract;
-      const { data } = await worker.recognize(processedImageUrl, 'eng');
+      if (!worker) {
+        throw new Error("Tesseract engine failed to load. Please check your internet connection.");
+      }
+      const { data } = await worker.recognize(processedCanvas, 'eng');
       const scannedText = data.text.replace(/‘|’|`|´/g, "'").replace(/“|”/g, '"');
       
-      // 3. Update code and automatically detect programming language
       setCode(scannedText);
       const detectedLang = detectLanguage(scannedText);
       setLanguage(detectedLang);
     } catch (err) { 
-      setError('OCR Failed: ' + err.message); 
+      setError('OCR Scanner Failed: ' + err.message); 
     } finally { 
       setIsScanning(false); 
+    }
+  };
+
+  const loadTemplate = (templateKey) => {
+    const template = CODE_TEMPLATES[templateKey];
+    if (template) {
+      setCode(template.code);
+      setLanguage(template.language);
+      reset();
     }
   };
 
@@ -548,17 +944,20 @@ const CodeVisualizer = () => {
             <div className="cv-panel">
                <div className="cv-panel-header">
                   <div className="cv-panel-title"><Code size={16} /> Source Code</div>
-                  <div style={{display:'flex', gap:'10px'}}>
+                  <div style={{display:'flex', alignItems:'center', gap:'10px'}}>
                     <input type="file" ref={fileInputRef} onChange={handleScanImage} accept="image/*" style={{display:'none'}} />
                     <button onClick={() => fileInputRef.current?.click()} className="cv-btn-icon highlight-camera" disabled={isScanning}>
                       {isScanning ? <RefreshCw className="spin" size={16} /> : <Camera size={16} />} <span style={{marginLeft:'5px'}}>Scan</span>
                     </button>
                     <select value={language} onChange={e => setLanguage(e.target.value)} className="cv-language-select">
-                      <option value="javascript">JS</option><option value="python">Py</option><option value="java">Java</option><option value="cpp">C++</option>
+                      <option value="javascript">JS</option>
+                      <option value="python">Py</option>
+                      <option value="java">Java</option>
+                      <option value="cpp">C++</option>
                     </select>
                   </div>
                </div>
-               <div className="monaco-editor-container" style={{ borderRadius: '16px', overflow: 'hidden', border: '1px solid rgba(139,92,246,0.3)', boxShadow: 'var(--clay-sm)' }}>
+               <div className="monaco-editor-container" style={{ borderRadius: '16px', overflow: 'hidden', border: '1px solid rgba(0,153,255,0.3)', boxShadow: 'var(--clay-sm)' }}>
                  <Editor
                    height="360px"
                    language={language === 'cpp' ? 'cpp' : language}
@@ -567,19 +966,30 @@ const CodeVisualizer = () => {
                    onMount={handleEditorDidMount}
                    onChange={(val) => setCode(val || '')}
                    options={{ 
-                    minimap: { enabled: false }, 
-                    fontSize: 14, 
-                    scrollBeyondLastLine: false, 
-                    lineNumbers: 'on', 
-                    roundedSelection: true, 
-                    fontFamily: "'Share Tech Mono', monospace", 
-                    padding: { top: 10, bottom: 10 }, 
-                    automaticLayout: false, 
-                    backgroundColor: '#0d0b14' 
-                  }}
-                />
+                     minimap: { enabled: false }, 
+                     fontSize: 14, 
+                     scrollBeyondLastLine: false, 
+                     lineNumbers: 'on', 
+                     roundedSelection: true, 
+                     fontFamily: "'Share Tech Mono', monospace", 
+                     padding: { top: 10, bottom: 10 }, 
+                     automaticLayout: true, 
+                     backgroundColor: '#0d0b14' 
+                   }}
+                 />
               </div>
-               {error && <div className="cv-error"><AlertCircle size={16}/> {error}</div>}
+              
+              {/* Presets and Quick Templates Panel */}
+              <div style={{ display: 'flex', gap: '10px', marginTop: '12px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '12px', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', marginRight: '5px' }}>Presets:</span>
+                {Object.entries(CODE_TEMPLATES).map(([key, t]) => (
+                  <button key={key} onClick={() => loadTemplate(key)} className="cv-btn-icon" style={{ padding: '6px 12px', textTransform: 'none' }}>
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+
+               {error && <div className="cv-error" style={{ color: '#EF4444', background: 'rgba(239,68,68,0.1)', padding: '10px', borderRadius: '10px', marginTop: '10px', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px' }}><AlertCircle size={16}/> {error}</div>}
             </div>
 
             <div className="cv-panel">
@@ -631,49 +1041,81 @@ const CodeVisualizer = () => {
                 </div>
               </div>
 
-             {currentState && (
-               <>
-                 <div className="cv-panel memory-mapper" style={{position:'relative'}}>
-                    <div className="cv-panel-title"><Layers size={16}/> Memory Heap Topology</div>
-                    <div className="render-canvas">
-                        <div className="visual-layers-stack">
-                           <div className="layer current-layer">
-                              {Object.entries(currentState.memoryStructures.arrays).map(([name, arr]) => <GlassArray key={name} name={name} arr={arr} />)}
-                              {Object.entries(currentState.memoryStructures.trees).map(([name, node]) => <GlassTree key={name} name={name} node={node} />)}
-                           </div>
+              <div className="cv-panel memory-mapper" style={{position:'relative'}}>
+                 <div className="cv-panel-title"><Layers size={16}/> Memory Heap Topology</div>
+                 <div className="render-canvas">
+                     <div className="visual-layers-stack">
+                        <div className="layer current-layer">
+                           {currentState && (
+                             <>
+                               {Object.entries(currentState.memoryStructures.arrays).map(([name, arr]) => (
+                                 <GlassArray key={name} name={name} arr={arr} />
+                               ))}
+                               {Object.entries(currentState.memoryStructures.trees)
+                                 .filter(([name, node]) => node && !node.isReference)
+                                 .map(([name, node]) => {
+                                    if (node.hasOwnProperty('next')) {
+                                      return <GlassList key={name} name={name} head={node} />;
+                                    } else {
+                                      return <GlassTree key={name} name={name} node={node} />;
+                                    }
+                                 })}
+                             </>
+                           )}
+                           {(!currentState || 
+                             (Object.keys(currentState.memoryStructures.arrays).length === 0 && 
+                              Object.keys(currentState.memoryStructures.trees).length === 0)) && (
+                             <div className="heap-placeholder" style={{ color: 'var(--text-muted)', textAlign: 'center', marginTop: '60px', fontStyle: 'italic', fontSize: '14px' }}>
+                               Heap is currently empty. Allocate nodes (e.g. root = new Node(10)) or arrays to visualize the topology.
+                             </div>
+                           )}
                         </div>
+                     </div>
+                 </div>
+              </div>
+
+              {currentState && deletedVault.length > 0 && (
+                 <div className="cv-panel vault-panel">
+                    <div className="cv-panel-title"><Database size={16}/> DEALLOCATION VAULT (Deleted Nodes)</div>
+                    <div className="vault-grid">
+                       {deletedVault.map((item, i) => (
+                         <div key={i} className="vault-item">
+                            <div className="vault-item-header">
+                               <span>{item.name} ({item.type})</span>
+                               <span className="vault-step">Step {item.step}</span>
+                            </div>
+                            <div className="vault-preview">
+                               {item.type === 'Array' ? (
+                                 <GlassArray name={item.name} arr={item.data} />
+                               ) : item.data.hasOwnProperty('next') ? (
+                                 <GlassList name={item.name} head={item.data} />
+                               ) : (
+                                 <GlassTree name={item.name} node={item.data} />
+                               )}
+                            </div>
+                         </div>
+                       ))}
                     </div>
                  </div>
+              )}
 
-                 {deletedVault.length > 0 && (
-                    <div className="cv-panel vault-panel">
-                       <div className="cv-panel-title"><Database size={16}/> DEALLOCATION VAULT (Deleted Nodes)</div>
-                       <div className="vault-grid">
-                          {deletedVault.map((item, i) => (
-                            <div key={i} className="vault-item">
-                               <div className="vault-item-header">
-                                  <span>{item.name} ({item.type})</span>
-                                  <span className="vault-step">Step {item.step}</span>
-                               </div>
-                               <div className="vault-preview">
-                                  {item.type === 'Array' ? <GlassArray name={item.name} arr={item.data} /> : <GlassTree name={item.name} node={item.data} />}
-                               </div>
-                            </div>
-                          ))}
-                       </div>
-                    </div>
-                 )}
-
-                 {currentState.output.length > 0 && (
-                    <div className="cv-panel">
-                      <div className="cv-panel-title"><Terminal size={16}/> Console Log</div>
-                      <div className="cv-console">
-                        {currentState.output.map((out, j) => (<div key={j} className="cv-console-line"><span className="cv-console-prompt">$</span> <span className="cv-console-text">{out}</span></div>))}
+              <div className="cv-panel">
+                <div className="cv-panel-title"><Terminal size={16}/> Console Log</div>
+                <div className="cv-console" style={{ minHeight: '120px' }}>
+                  {currentState && currentState.output && currentState.output.length > 0 ? (
+                    currentState.output.map((out, j) => (
+                      <div key={j} className="cv-console-line">
+                        <span className="cv-console-prompt">$</span> 
+                        <span className="cv-console-text">{out}</span>
                       </div>
+                    ))
+                  ) : (
+                    <div className="cv-console-placeholder" style={{ color: 'var(--text-muted)', fontStyle: 'italic', fontSize: '13px' }}>
+                      Console is empty. Run or step through code to see outputs.
                     </div>
-                 )}
-               </>
-             )}
+                  )}
+                </div>
+              </div>
           </div>
         </div>
       </div>
