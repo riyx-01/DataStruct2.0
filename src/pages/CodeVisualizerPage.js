@@ -139,7 +139,29 @@ try:
     sys.settrace(trace_calls)
     exec(user_code, {})
 except Exception as e:
-    trace_state.console_output.append(f"Traceback Error: {str(e)}")
+    err_msg = f"Traceback Error: {str(e)}"
+    trace_state.console_output.append(err_msg)
+    
+    last_state = trace_state.history[-1] if trace_state.history else None
+    line_no = 1
+    tb = sys.exc_info()[2]
+    while tb and tb.tb_next:
+        tb = tb.tb_next
+    if tb:
+        line_no = tb.tb_lineno
+        
+    code_lines = user_code.split('\\n')
+    code_line = code_lines[line_no - 1].strip() if 0 < line_no <= len(code_lines) else "Error line"
+    
+    trace_state.history.append({
+        "line": line_no,
+        "code": code_line,
+        "variables": last_state["variables"] if last_state else {},
+        "memoryStructures": last_state["memoryStructures"] if last_state else {"arrays": {}, "trees": {}, "graphs": {}, "stacks": {}, "objects": {}},
+        "why": f"Runtime Exception: {err_msg}",
+        "deletedElements": [],
+        "output": [line for line in trace_state.console_output if line.strip()]
+    })
 finally:
     sys.settrace(None)
     sys.stdout = sys.__stdout__
@@ -184,6 +206,20 @@ console.log("Deleting node 20...");
 // Unlink node 20
 head.next = head.next.next;
 console.log("Node 20 deleted successfully.");`
+  },
+  python_queue: {
+    name: "Python List Queue",
+    language: "python",
+    code: `queue = [] 
+queue.append(10) 
+queue.append(20)
+queue.append(30)
+
+print("Queue:", queue)
+
+# Dequeue the first element
+queue.pop(0) 
+print("After dequeue:", queue)`
   },
   python_stack: {
     name: "Python Stack Class",
@@ -516,19 +552,63 @@ const simulateExecution = (rawCode, language) => {
         currentOutput.push(resolvedArgs.join(' '));
       }
     }
-    // 3. Array Instantiation: int stack[5];
+    // 3. Array Instantiation: int stack[5]; or queue = []
     else if (line.match(/^(\w+)\s+(\w+)\s*\[\s*\d*\s*\]\s*;?$/)) {
       why = "Memory Allocation: Initializing array structure in stack/heap.";
       const match = line.match(/^(\w+)\s+(\w+)\s*\[\s*\d*\s*\]\s*;?$/);
       const name = match[2];
       variables[name] = [];
     }
-    // 4. Standalone increment / decrement statement: top--; or ++top;
+    // 4. Array mutations: queue.append(10), stack.push(20), stack.pop()
+    else if (line.match(/^([\w*&]+)\.(append|push|push_back|pop|shift|unshift|insert)\s*\(([^)]*)\);?$/)) {
+      const arrayIndexMatch = line.match(/^([\w*&]+)\.(append|push|push_back|pop|shift|unshift|insert)\s*\(([^)]*)\);?$/);
+      const arrayName = arrayIndexMatch[1].replace(/^[*&]+/, '');
+      const method = arrayIndexMatch[2];
+      const argsStr = arrayIndexMatch[3].trim();
+      
+      why = `Heap Mutation: Executing list operation .${method}() on ${arrayName}.`;
+      
+      if (!variables[arrayName]) {
+        variables[arrayName] = [];
+      }
+      
+      if (Array.isArray(variables[arrayName])) {
+        const arr = variables[arrayName];
+        if (method === 'append' || method === 'push' || method === 'push_back') {
+          const val = resolveExpression(argsStr);
+          arr.push(val);
+        } else if (method === 'pop') {
+          if (argsStr !== '') {
+            const idx = resolveExpression(argsStr);
+            if (idx >= 0 && idx < arr.length) {
+              arr.splice(idx, 1);
+            } else {
+              currentOutput.push(`Traceback Error: pop index out of range`);
+            }
+          } else {
+            arr.pop();
+          }
+        } else if (method === 'shift') {
+          arr.shift();
+        } else if (method === 'unshift') {
+          const val = resolveExpression(argsStr);
+          arr.unshift(val);
+        } else if (method === 'insert') {
+          const parts = argsStr.split(',').map(p => p.trim());
+          if (parts.length === 2) {
+            const idx = resolveExpression(parts[0]);
+            const val = resolveExpression(parts[1]);
+            arr.splice(idx, 0, val);
+          }
+        }
+      }
+    }
+    // 5. Standalone increment / decrement statement: top--; or ++top;
     else if (line.match(/^(\+\+|--)?\s*(\w+)\s*(\+\+|--)?\s*;?$/)) {
       why = "State Mutation: Modifying variable value.";
       resolveExpression(line);
     }
-    // 5. Variable Assignments with =
+    // 6. Variable Assignments with =
     else if (line.includes('=')) {
       const eqIdx = line.indexOf('=');
       const lhs = line.substring(0, eqIdx).trim();
@@ -575,7 +655,7 @@ const simulateExecution = (rawCode, language) => {
           }
           variables[arrayName][resolvedIndex] = resolvedVal;
         }
-        // General assignment (e.g. int top = -1)
+        // General assignment (e.g. int top = -1, queue = [])
         else {
           why = "State Mutation: Binding a new value to a variable descriptor.";
           const varMatch = lhs.match(/([\w*&]+)$/);
