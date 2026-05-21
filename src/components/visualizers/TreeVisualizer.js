@@ -36,6 +36,22 @@ const TreeVisualizer = ({ data, foundIndex }) => {
         >
           {level.map((item, idx) => {
             const isFound = foundIndex === item.index;
+            const isNull = item.value === null || item.value === undefined;
+            const width = levelIndex === 0 ? '90px' : levelIndex === 1 ? '80px' : '70px';
+            const height = levelIndex === 0 ? '90px' : levelIndex === 1 ? '80px' : '70px';
+
+            if (isNull) {
+              return (
+                <div
+                  key={`tree-null-${item.index}`}
+                  style={{
+                    width,
+                    height,
+                    visibility: 'hidden',
+                  }}
+                />
+              );
+            }
             
             return (
               <motion.div
@@ -52,8 +68,8 @@ const TreeVisualizer = ({ data, foundIndex }) => {
                   delay: item.index * 0.1
                 }}
                 style={{
-                  width: levelIndex === 0 ? '90px' : levelIndex === 1 ? '80px' : '70px',
-                  height: levelIndex === 0 ? '90px' : levelIndex === 1 ? '80px' : '70px',
+                  width,
+                  height,
                   borderRadius: '50%',
                   background: isFound
                     ? 'linear-gradient(135deg, #10b981, #059669)'

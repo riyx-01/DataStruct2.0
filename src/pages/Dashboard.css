@@ -59,7 +59,8 @@
 
 .dash-progress-list { display:flex; flex-direction:column; gap:16px; }
 .dash-progress-item { background:rgba(255,255,255,0.04); border:1px solid rgba(0, 153, 255, 0.14); border-radius:18px; padding:18px 20px; box-shadow:inset 6px 6px 12px rgba(0,0,0,0.2); }
-.dash-progress-meta { display:flex; justify-content:space-between; margin-bottom:12px; font-size:0.9rem; font-weight:700; color:var(--text-main); }
+.dash-progress-meta { display:flex; justify-content:space-between; margin-bottom:6px; font-size:0.9rem; font-weight:700; color:var(--text-main); }
+.dash-progress-detail { margin-bottom:12px; font-size:0.74rem; font-weight:700; color:var(--text-muted); }
 .dash-progress-track { height:10px; background:rgba(255,255,255,0.07); border-radius:8px; overflow:hidden; box-shadow:inset 0 2px 4px rgba(0,0,0,0.3); }
 .dash-progress-fill  { height:100%; border-radius:8px; box-shadow:0 0 12px currentColor; transition: width 1s ease-out; }
 

@@ -2,21 +2,40 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { 
-  Users, Code, Trophy, TrendingUp,
+  Users, Trophy,
   Activity, BookOpen, Calendar, Clock, ChevronRight, Zap
 } from 'lucide-react';
 import './Dashboard.css';
 
 const Dashboard = ({ user }) => {
   const navigate = useNavigate();
-  const [userStats, setUserStats] = useState({ visualizations: 0, quizzesTaken: 0, avgScore: 0, history: [] });
+  const [userStats, setUserStats] = useState({ visualizations: 0, quizzesTaken: 0, avgScore: 0, history: [], visualizersVisited: {} });
 
   useEffect(() => {
     const savedStats = JSON.parse(localStorage.getItem('userStats'));
     if (savedStats) {
-      setUserStats(savedStats);
+      setUserStats({
+        visualizations: 0,
+        quizzesTaken: 0,
+        avgScore: 0,
+        history: [],
+        visualizersVisited: {},
+        ...savedStats,
+      });
     }
   }, []);
+
+  const visitedVisualizers = userStats.visualizersVisited || {};
+  const quizScoreFactor = userStats.quizzesTaken > 0 ? Math.max(0.35, (Number(userStats.avgScore) || 0) / 100) : 0;
+  const quizCredit = Math.min(30, userStats.quizzesTaken * 10 * quizScoreFactor);
+  const getCategoryProgress = (structures) => {
+    const visitedCount = structures.filter((structure) => visitedVisualizers[structure]).length;
+    const visualizerCredit = structures.length ? (visitedCount / structures.length) * 70 : 0;
+    return {
+      progress: Math.min(100, Math.round(visualizerCredit + quizCredit)),
+      detail: `${visitedCount}/${structures.length} visualizers explored`
+    };
+  };
 
   const summaryStats = [
     { label: 'Completed Quizzes', value: userStats.quizzesTaken.toString(), icon: Trophy, color: '#f59e0b', bg: 'rgba(245, 158, 11, 0.1)' },
@@ -39,12 +58,20 @@ const Dashboard = ({ user }) => {
         { action: 'Quiz: Hash Tables',           desc: 'Scored 80% on Hash Table challenge', time: '2 days ago', color: '#ef4444' },
       ];
 
-  const courses = [
-    { name: 'Linear Data Structures',    progress: Math.min(100, Math.max(10, userStats.visualizations * 12 + userStats.quizzesTaken * 5)), color: '#3b82f6' },
-    { name: 'Non-Linear (Trees/Graphs)', progress: Math.min(100, Math.max(5, userStats.quizzesTaken * 25 + userStats.visualizations * 4)), color: '#8b5cf6' },
-    { name: 'Memory & Pointers',         progress: Math.min(100, Math.max(15, userStats.visualizations * 10 + userStats.quizzesTaken * 8)), color: '#f59e0b' },
-    { name: 'Algorithm Complexity',      progress: Math.min(100, Math.max(20, Math.round(userStats.avgScore * 0.7) + userStats.quizzesTaken * 5)), color: '#10b981' },
+  const progressCatalog = [
+    { name: 'Linear Data Structures', structures: ['array', 'dynamic_array', 'stack', 'queue', 'circular_queue', 'linkedlist', 'doubly_linkedlist', 'circular_linkedlist'], color: '#3b82f6' },
+    { name: 'Trees & Heaps', structures: ['tree', 'bst', 'avl', 'heap', 'minheap', 'trie'], color: '#8b5cf6' },
+    { name: 'Graphs & Hashing', structures: ['graph', 'hashtable', 'bloom', 'disjoint'], color: '#f59e0b' },
+    { name: 'Quiz Mastery', structures: [], color: '#10b981', progress: Math.min(100, Math.round(userStats.quizzesTaken * 20 * quizScoreFactor)), detail: `${userStats.quizzesTaken} quiz${userStats.quizzesTaken === 1 ? '' : 'zes'} completed` },
   ];
+
+  const courses = progressCatalog.map((category) => {
+    if (typeof category.progress === 'number') return category;
+    return {
+      ...category,
+      ...getCategoryProgress(category.structures)
+    };
+  });
 
   const quickLinks = [
     { label: 'Array',       path: '/visualizer/array' },
@@ -109,6 +136,7 @@ const Dashboard = ({ user }) => {
                   <span>{c.name}</span>
                   <span style={{ color: c.color, fontWeight: 700 }}>{c.progress}%</span>
                 </div>
+                <div className="dash-progress-detail">{c.detail}</div>
                 <div className="dash-progress-track">
                   <motion.div
                     className="dash-progress-fill"
